@@ -52,16 +52,12 @@ GENERIC_WORDS = (
     "看",
     "一下",
     "教学班",
-    "课程",
     "能上的",
     "可以上的",
     "可上的",
-    "相关的",
-    "相关",
     "最好",
     "给我",
     "有哪些",
-    "课",
 )
 
 
@@ -76,6 +72,9 @@ def _clean_keyword(text: str) -> str | None:
     cleaned = re.sub(r"最多\s*\d+\s*门?", " ", cleaned)
     cleaned = re.sub(r"前\s*\d+\s*门?", " ", cleaned)
     cleaned = re.sub(r"返回\s*\d+\s*门?", " ", cleaned)
+    # Remove only natural-language suffixes. Do not globally strip “课程/课”,
+    # because they may be part of an actual course name such as “课程设计”.
+    cleaned = re.sub(r"(?:相关的?|的)?课程?\s*$", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" 的地得")
     if not cleaned:
         return None
