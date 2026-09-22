@@ -94,6 +94,7 @@ def _serialize_course(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, A
 def search_courses(
     *,
     keyword: str | None = None,
+    keyword_includes_teacher: bool = True,
     teacher: str | None = None,
     department: str | None = None,
     campus: str | None = None,
@@ -112,7 +113,9 @@ def search_courses(
     """Search teaching classes using structured filters.
 
     Time filters are applied to the same session. If a period range is provided,
-    a class matches when its session overlaps that range.
+    a class matches when its session overlaps that range. Keyword matching can
+    optionally include teacher names; dedicated teacher filtering is always
+    available through the ``teacher`` argument.
     """
     _validate_range("day", day, 1, 7)
     _validate_range("period_start", period_start, 1, 14)
@@ -129,18 +132,28 @@ def search_courses(
 
     for token in (keyword or "").split():
         pattern = _like(token)
-        clauses.append(
-            """(
-                c.name LIKE ? ESCAPE '\\' OR
-                c.code LIKE ? ESCAPE '\\' OR
-                c.course_code LIKE ? ESCAPE '\\' OR
-                EXISTS (
-                    SELECT 1 FROM teachers kt
-                    WHERE kt.course_id=c.id AND kt.name LIKE ? ESCAPE '\\'
-                )
-            )"""
-        )
-        params.extend([pattern, pattern, pattern, pattern])
+        if keyword_includes_teacher:
+            clauses.append(
+                """(
+                    c.name LIKE ? ESCAPE '\\' OR
+                    c.code LIKE ? ESCAPE '\\' OR
+                    c.course_code LIKE ? ESCAPE '\\' OR
+                    EXISTS (
+                        SELECT 1 FROM teachers kt
+                        WHERE kt.course_id=c.id AND kt.name LIKE ? ESCAPE '\\'
+                    )
+                )"""
+            )
+            params.extend([pattern, pattern, pattern, pattern])
+        else:
+            clauses.append(
+                """(
+                    c.name LIKE ? ESCAPE '\\' OR
+                    c.code LIKE ? ESCAPE '\\' OR
+                    c.course_code LIKE ? ESCAPE '\\'
+                )"""
+            )
+            params.extend([pattern, pattern, pattern])
 
     if teacher:
         clauses.append(

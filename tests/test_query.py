@@ -95,6 +95,17 @@ class QueryTests(unittest.TestCase):
         result = search_courses(keyword="张三", db_path=self.db)
         self.assertEqual([c["id"] for c in result["courses"]], [1])
 
+    def test_keyword_teacher_matching_can_be_disabled(self) -> None:
+        teacher_only = search_courses(
+            keyword="张三", keyword_includes_teacher=False, db_path=self.db
+        )
+        self.assertEqual(teacher_only["total"], 0)
+
+        course_name = search_courses(
+            keyword="机器学习", keyword_includes_teacher=False, db_path=self.db
+        )
+        self.assertEqual([c["id"] for c in course_name["courses"]], [1])
+
     def test_available_only(self) -> None:
         result = search_courses(available_only=True, db_path=self.db)
         self.assertEqual([c["id"] for c in result["courses"]], [1])
