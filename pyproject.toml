@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fdu-courses-mcp"
+version = "0.1.0"
+description = "SQLite query layer and MCP server for Fudan University course data"
+requires-python = ">=3.10"
+dependencies = [
+  "mcp[cli]>=2,<3",
+]
+
+[project.scripts]
+fdu-courses-import = "server.import_data:main"
+fdu-courses-mcp = "server.mcp_server:main"
+
+[tool.setuptools]
+packages = ["server"]
