@@ -35,6 +35,9 @@ server/
 ├── import_data.py     latest.json → SQLite
 ├── queries.py         结构化课程查询
 └── mcp_server.py      MCP tools
+api/
+└── index.py           Vercel ASGI / Streamable HTTP MCP 入口
+vercel.json            Vercel 构建、Function 与路由配置
 ```
 
 ## 更新数据
@@ -125,7 +128,7 @@ fdu-courses-mcp
 python -m server.mcp_server
 ```
 
-### Streamable HTTP / 远程 MCP
+### Streamable HTTP / 自建远程 MCP
 
 ```bash
 export FDU_MCP_TRANSPORT=streamable-http
@@ -144,6 +147,33 @@ export FDU_MCP_ALLOWED_ORIGINS='https://example.com'
 ```
 
 部署真实域名时应显式配置 `FDU_MCP_ALLOWED_HOSTS`,不要依赖本地 localhost 默认值。
+
+### Vercel 一键部署远程 MCP
+
+仓库已包含 `api/index.py` 和 `vercel.json`,可直接将仓库导入 Vercel,或在仓库根目录运行:
+
+```bash
+npm i -g vercel
+vercel
+vercel --prod
+```
+
+Vercel 构建阶段会执行:
+
+```bash
+python -m server.import_data
+```
+
+把 `docs/data/latest.json` 预生成成 SQLite 并打包到 Python Function。若本地 `vercel dev` 或异常构建情况下没有预生成数据库,`api/index.py` 会自动在 `/tmp` 中生成一次作为后备。
+
+部署后有两个公开入口:
+
+- `https://<deployment>.vercel.app/mcp` — MCP Streamable HTTP endpoint
+- `https://<deployment>.vercel.app/health` — 健康检查与课程数据版本
+
+Vercel 入口使用 `stateless_http=True` + JSON response,适合 Serverless/Fluid Compute。Vercel 已在公网反向代理层控制 Host/TLS,因此 `api/index.py` 仅对 Vercel 部署入口关闭 MCP SDK 面向 localhost 的 DNS-rebinding Host 检查;本地/自建 `server.mcp_server` 仍保留显式 Host allowlist 配置。
+
+课程数据更新后只需提交新的 `docs/data/latest.json`;Vercel 下一次部署会重新生成 SQLite。
 
 ### 测试
 
@@ -171,4 +201,6 @@ python -m unittest discover -s tests -v
 
 ## 部署
 
-任意静态托管均可。GitHub Pages:仓库 Settings → Pages → Source 选 `main` 分支 `/docs` 目录。
+静态网页仍可使用 GitHub Pages:仓库 Settings → Pages → Source 选 `main` 分支 `/docs` 目录。
+
+AI/MCP 服务建议直接部署到 Vercel,连接 URL 使用生产域名的 `/mcp`。
