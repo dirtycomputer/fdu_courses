@@ -5,11 +5,15 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 30,
-      "includeFiles": "{data/courses.db,docs/data/latest.json}",
+      "includeFiles": "{data/courses.db,docs/data/latest.json,web/index.html}",
       "excludeFiles": "{tests/**,fetch/**,docs/index.html,docs/app.js,docs/style.css}"
     }
   },
   "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/home"
+    },
     {
       "source": "/mcp",
       "destination": "/api/mcp"
@@ -17,6 +21,10 @@
     {
       "source": "/health",
       "destination": "/api/health"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "/api/openapi.json"
     }
   ],
   "headers": [
@@ -31,6 +39,15 @@
     },
     {
       "source": "/api/mcp",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

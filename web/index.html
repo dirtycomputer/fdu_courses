@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FDU Courses · 一句话查课</title>
+  <meta name="description" content="用自然语言查询复旦大学全校课程，无需登录、无需安装。" />
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --text: #17191c;
+      --muted: #686f78;
+      --line: #e3e6ea;
+      --accent: #111827;
+      --soft: #f0f2f5;
+      --good: #136f43;
+      --danger: #a12d2d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 72px; }
+    header { margin-bottom: 28px; }
+    .eyebrow { font-size: 13px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+    h1 { font-size: clamp(32px, 6vw, 54px); line-height: 1.02; margin: 10px 0 12px; letter-spacing: -.035em; }
+    .lead { margin: 0; max-width: 720px; color: var(--muted); font-size: 16px; line-height: 1.7; }
+    .search {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 12px 40px rgba(17, 24, 39, .06);
+    }
+    textarea {
+      width: 100%; min-height: 92px; resize: vertical; border: 0; outline: 0; background: transparent;
+      color: var(--text); font: inherit; font-size: 18px; line-height: 1.55; padding: 4px;
+    }
+    .actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; }
+    .hint { color: var(--muted); font-size: 13px; }
+    button {
+      appearance: none; border: 0; border-radius: 11px; padding: 11px 18px; font: inherit; font-weight: 650;
+      background: var(--accent); color: white; cursor: pointer;
+    }
+    button:disabled { opacity: .55; cursor: wait; }
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 30px; }
+    .example {
+      background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 7px 10px; border-radius: 999px;
+      font-size: 13px; font-weight: 500;
+    }
+    .status { min-height: 24px; color: var(--muted); font-size: 14px; margin: 18px 0 8px; }
+    .status.error { color: var(--danger); }
+    .parsed { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 18px; }
+    .chip { background: var(--soft); border-radius: 999px; padding: 6px 9px; font-size: 12px; color: #3d4650; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .course {
+      background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+      min-width: 0;
+    }
+    .course h2 { margin: 0 0 7px; font-size: 18px; line-height: 1.35; }
+    .meta { color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .schedule { margin-top: 12px; display: grid; gap: 6px; }
+    .session { font-size: 13px; background: var(--soft); border-radius: 9px; padding: 8px 9px; line-height: 1.45; }
+    .links { margin-top: 12px; display: flex; gap: 12px; font-size: 13px; }
+    a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    footer { margin-top: 38px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1.7; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .95em; }
+    @media (max-width: 720px) {
+      main { width: min(100% - 22px, 1040px); padding-top: 34px; }
+      .grid { grid-template-columns: 1fr; }
+      .actions { align-items: flex-end; }
+      .hint { max-width: 65%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">FDU Courses</div>
+      <h1>一句话查复旦课程</h1>
+      <p class="lead">无需登录、无需安装。直接描述你想找的课程，系统会把自然语言解析为校区、星期、节次、学分等结构化条件，再查询课程数据库。</p>
+    </header>
+
+    <section class="search">
+      <textarea id="query" autofocus placeholder="例如：找周三下午张江校区、3 学分以上、本科生能上的人工智能相关课程，最多 10 门"></textarea>
+      <div class="actions">
+        <div class="hint">Enter 查询 · Shift + Enter 换行</div>
+        <button id="submit">查询</button>
+      </div>
+    </section>
+
+    <div class="examples" aria-label="查询示例">
+      <button class="example">周三下午张江的本科人工智能课</button>
+      <button class="example">王老师周五晚上的课</button>
+      <button class="example">江湾 3 学分以上研究生课程，最多 8 门</button>
+      <button class="example">第 5 周周二上午有余量的课程</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <div id="parsed" class="parsed"></div>
+    <section id="results" class="grid"></section>
+
+    <footer>
+      公开只读接口：<a href="/openapi.json"><code>/openapi.json</code></a> ·
+      结构化查询 <code>/api/courses</code> · 自然语言查询 <code>/api/ask</code> · MCP <code>/mcp</code>。
+      数据来自复旦大学教务服务系统公开课程查询接口。
+    </footer>
+  </main>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const queryEl = $('#query');
+    const submitEl = $('#submit');
+    const statusEl = $('#status');
+    const parsedEl = $('#parsed');
+    const resultsEl = $('#results');
+
+    const labels = {
+      keyword: '关键词', teacher: '教师', department: '院系', campus: '校区', biz_type: '类型',
+      min_credits: '最低学分', max_credits: '最高学分', day: '星期', period_start: '起始节',
+      period_end: '结束节', week: '教学周', has_syllabus: '有大纲', available_only: '有余量', limit: '最多返回'
+    };
+    const dayNames = {1:'周一',2:'周二',3:'周三',4:'周四',5:'周五',6:'周六',7:'周日'};
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    }
+
+    function renderParsed(parsed) {
+      parsedEl.innerHTML = Object.entries(parsed || {}).map(([k, v]) => {
+        if (k === 'day') v = dayNames[v] || v;
+        if (typeof v === 'boolean') v = v ? '是' : '否';
+        return `<span class="chip">${esc(labels[k] || k)}：${esc(v)}</span>`;
+      }).join('');
+    }
+
+    function renderCourse(c) {
+      const teachers = (c.teachers || []).join('、') || '教师未公布';
+      const campuses = (c.campuses || []).join('、') || '校区未标注';
+      const sessions = (c.sessions || []).map(s =>
+        `<div class="session">${esc(s.day_name)} · 第 ${esc(s.period_start)}-${esc(s.period_end)} 节 · ${esc(s.weeks_text || '周次未标注')}${s.room ? ` · ${esc(s.room)}` : ''}</div>`
+      ).join('') || '<div class="session">上课时间未标注</div>';
+      const syllabus = c.syllabus_url ? `<a href="${esc(c.syllabus_url)}" target="_blank" rel="noreferrer">教学大纲 ↗</a>` : '';
+      return `<article class="course">
+        <h2>${esc(c.name)}</h2>
+        <div class="meta">${esc(teachers)} · ${esc(c.credits ?? '—')} 学分 · ${esc(c.department || '开课单位未标注')}</div>
+        <div class="meta">${esc(c.biz_type || '')} · ${esc(campuses)} · ${esc(c.course_code || c.code || '')}</div>
+        <div class="schedule">${sessions}</div>
+        <div class="links">${syllabus}</div>
+      </article>`;
+    }
+
+    async function runQuery() {
+      const query = queryEl.value.trim();
+      if (!query) return;
+      submitEl.disabled = true;
+      statusEl.className = 'status';
+      statusEl.textContent = '正在查询…';
+      parsedEl.innerHTML = '';
+      resultsEl.innerHTML = '';
+      try {
+        const res = await fetch('/api/ask', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query})
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        renderParsed(data.parsed);
+        statusEl.textContent = `找到 ${data.total} 个教学班，显示 ${data.returned} 个 · ${data.semester || ''}`;
+        resultsEl.innerHTML = (data.courses || []).map(renderCourse).join('');
+        if (!data.courses?.length) resultsEl.innerHTML = '<div class="course">没有匹配结果。可以减少关键词或放宽时间、校区、学分限制。</div>';
+      } catch (err) {
+        statusEl.className = 'status error';
+        statusEl.textContent = `查询失败：${err.message}`;
+      } finally {
+        submitEl.disabled = false;
+      }
+    }
+
+    submitEl.addEventListener('click', runQuery);
+    queryEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        runQuery();
+      }
+    });
+    document.querySelectorAll('.example').forEach(btn => btn.addEventListener('click', () => {
+      queryEl.value = btn.textContent.trim();
+      runQuery();
+    }));
+  </script>
+</body>
+</html>
