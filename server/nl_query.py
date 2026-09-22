@@ -36,8 +36,12 @@ BIZ_PATTERNS = (
 )
 
 GENERIC_WORDS = (
-    "帮我",
     "请帮我",
+    "帮我",
+    "我想看看",
+    "我想找",
+    "我要",
+    "想找",
     "请",
     "查询",
     "查找",
@@ -47,8 +51,8 @@ GENERIC_WORDS = (
     "看看",
     "看",
     "一下",
-    "课程",
     "教学班",
+    "课程",
     "能上的",
     "可以上的",
     "可上的",
@@ -57,6 +61,7 @@ GENERIC_WORDS = (
     "最好",
     "给我",
     "有哪些",
+    "课",
 )
 
 
@@ -83,6 +88,34 @@ def _clean_keyword(text: str) -> str | None:
     for token in cleaned.split():
         parts.append(aliases.get(token.lower(), token))
     return " ".join(parts) or None
+
+
+def _teacher_name(raw: str) -> str | None:
+    name = raw.strip()
+    prefixes = (
+        "请帮我找",
+        "帮我找",
+        "我想看看",
+        "我想找",
+        "我要",
+        "想找",
+        "请找",
+        "查询",
+        "查找",
+        "找",
+        "查",
+    )
+    changed = True
+    while changed:
+        changed = False
+        for prefix in prefixes:
+            if name.startswith(prefix):
+                name = name[len(prefix) :].strip()
+                changed = True
+                break
+    if 1 <= len(name) <= 4:
+        return name
+    return None
 
 
 def parse_natural_query(query: str, *, default_limit: int = 20) -> dict[str, Any]:
@@ -175,10 +208,12 @@ def parse_natural_query(query: str, *, default_limit: int = 20) -> dict[str, Any
             filters["max_credits"] = value
             work = _strip_span(work, exact_credit)
 
-    teacher_match = re.search(r"([\u4e00-\u9fff·]{2,8})\s*老师", work)
+    teacher_match = re.search(r"([\u4e00-\u9fff·]{1,12})\s*老师", work)
     if teacher_match:
-        filters["teacher"] = teacher_match.group(1)
-        work = _strip_span(work, teacher_match)
+        teacher = _teacher_name(teacher_match.group(1))
+        if teacher:
+            filters["teacher"] = teacher
+            work = _strip_span(work, teacher_match)
 
     syllabus_match = re.search(r"(?:有|带|包含)(?:教学)?大纲|有syllabus", work, re.IGNORECASE)
     if syllabus_match:
