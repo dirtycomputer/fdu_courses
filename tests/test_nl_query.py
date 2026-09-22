@@ -47,6 +47,10 @@ class NaturalLanguageQueryTests(unittest.TestCase):
         self.assertEqual(parsed["min_credits"], 3.0)
         self.assertEqual(parsed["max_credits"], 3.0)
 
+    def test_preserves_course_name_containing_course_word(self):
+        parsed = parse_natural_query("找课程设计")
+        self.assertEqual(parsed["keyword"], "课程设计")
+
     def test_rejects_invalid_period(self):
         with self.assertRaises(ValueError):
             parse_natural_query("周三第 18 节的课")
