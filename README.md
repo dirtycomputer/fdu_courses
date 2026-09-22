@@ -30,6 +30,11 @@ docs/               静态站点(GitHub Pages 根目录)
 └── data/latest.json   课程数据(由抓取脚本生成)
 fetch/
 └── fetch.py           数据抓取脚本(Python 3 标准库,无依赖)
+server/
+├── db.py              SQLite 连接
+├── import_data.py     latest.json → SQLite
+├── queries.py         结构化课程查询
+└── mcp_server.py      MCP tools
 ```
 
 ## 更新数据
@@ -60,6 +65,109 @@ python3 -m http.server 8765 --directory docs
 ```
 
 访问 <http://localhost:8765>。
+
+## AI / MCP 查询
+
+课程数据可以导入 SQLite,再通过 MCP 暴露给 ChatGPT、Claude、Cursor 等支持 MCP 的客户端。模型只负责把自然语言转换成结构化筛选参数,课程匹配、周次和节次判断由 SQLite 完成。
+
+### 安装
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+Windows PowerShell 激活虚拟环境时使用 `.venv\Scripts\Activate.ps1`。
+
+### 生成 SQLite 数据库
+
+```bash
+python -m server.import_data
+```
+
+默认读取 `docs/data/latest.json`,输出 `data/courses.db`。也可以指定路径:
+
+```bash
+python -m server.import_data --source docs/data/latest.json --out data/courses.db
+```
+
+每次刷新课程 JSON 后重新运行一次导入即可:
+
+```bash
+python3 fetch/fetch.py --semester 527 --name "2026-2027学年1学期" --start 2026-09-07
+python -m server.import_data
+```
+
+### MCP tools
+
+当前暴露两个只读工具:
+
+- `search_courses`:按课程/教师关键词、院系、校区、学位类型、学分、星期、节次、教学周、教学大纲、是否未满员进行组合查询。
+- `get_course`:按教学班 ID、教学班代码或课程代码读取完整课程信息和上课安排。
+
+时间参数约定:
+
+- `day`:1=周一,...,7=周日
+- `period_start` / `period_end`:1~14 节
+- 同时给出起止节次时,按课程时段与目标时段是否重叠判断
+- MCP 指令中约定下午通常为第 6~10 节,晚上通常为第 11~14 节
+
+### 本地 stdio MCP
+
+```bash
+fdu-courses-mcp
+```
+
+也可以直接运行:
+
+```bash
+python -m server.mcp_server
+```
+
+### Streamable HTTP / 远程 MCP
+
+```bash
+export FDU_MCP_TRANSPORT=streamable-http
+export FDU_MCP_HOST=0.0.0.0
+export FDU_MCP_PORT=8000
+export FDU_MCP_ALLOWED_HOSTS='mcp.example.com,mcp.example.com:*'
+fdu-courses-mcp
+```
+
+MCP endpoint 为 `/mcp`,例如 `https://mcp.example.com/mcp`。
+
+如果浏览器客户端会发送 `Origin`,可额外配置:
+
+```bash
+export FDU_MCP_ALLOWED_ORIGINS='https://example.com'
+```
+
+部署真实域名时应显式配置 `FDU_MCP_ALLOWED_HOSTS`,不要依赖本地 localhost 默认值。
+
+### 测试
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+自然语言示例:
+
+> 找周三下午张江校区、3 学分以上、本科生能上的计算机相关课程。
+
+模型可以将其转换为类似以下工具参数:
+
+```json
+{
+  "keyword": "计算机",
+  "campus": "张江校区",
+  "biz_type": "本科",
+  "min_credits": 3,
+  "day": 3,
+  "period_start": 6,
+  "period_end": 10
+}
+```
 
 ## 部署
 
