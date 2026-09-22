@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>复旦一句话查课</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --text: #16181d;
+      --muted: #6e7480;
+      --line: #e4e7ec;
+      --accent: #2457d6;
+      --accent-soft: #eef3ff;
+      --ok: #217a52;
+      --shadow: 0 16px 40px rgba(24, 33, 51, .08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(circle at 50% -10%, #e9efff 0, var(--bg) 38rem);
+      color: var(--text);
+    }
+    a { color: inherit; }
+    .shell { width: min(960px, calc(100% - 28px)); margin: 0 auto; padding: 58px 0 80px; }
+    .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+    h1 { margin: 10px 0 10px; font-size: clamp(34px, 7vw, 58px); line-height: 1.04; letter-spacing: -.04em; }
+    .lead { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+    .search-card {
+      margin-top: 34px; padding: 18px; background: rgba(255,255,255,.92); border: 1px solid rgba(228,231,236,.9);
+      border-radius: 22px; box-shadow: var(--shadow); backdrop-filter: blur(12px);
+    }
+    form { display: flex; gap: 10px; }
+    input {
+      flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 14px; padding: 15px 16px;
+      font: inherit; font-size: 16px; outline: none; background: #fff;
+    }
+    input:focus { border-color: #8da8ef; box-shadow: 0 0 0 4px rgba(36,87,214,.09); }
+    button {
+      border: 0; border-radius: 14px; padding: 0 22px; font: inherit; font-weight: 700; cursor: pointer;
+      background: var(--accent); color: #fff;
+    }
+    button:disabled { opacity: .6; cursor: wait; }
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+    .chip {
+      border: 1px solid var(--line); background: #fff; color: #4c5360; border-radius: 999px; padding: 8px 11px;
+      font-size: 13px; cursor: pointer;
+    }
+    .status { min-height: 24px; margin: 26px 2px 10px; color: var(--muted); font-size: 14px; }
+    .parsed { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 16px; }
+    .tag { background: var(--accent-soft); color: #3156af; border-radius: 999px; padding: 6px 9px; font-size: 12px; font-weight: 650; }
+    .results { display: grid; gap: 12px; }
+    .course {
+      background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 19px;
+      box-shadow: 0 8px 28px rgba(24,33,51,.045);
+    }
+    .course-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+    .course h2 { font-size: 18px; margin: 0; letter-spacing: -.01em; }
+    .credits { white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--ok); background: #edf8f2; border-radius: 999px; padding: 5px 8px; }
+    .meta { margin-top: 7px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .sessions { display: grid; gap: 6px; margin-top: 13px; }
+    .session { background: #fafbfc; border-radius: 10px; padding: 9px 11px; font-size: 13px; color: #3f4651; }
+    .footer { margin-top: 30px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .footer a { color: var(--accent); text-decoration: none; }
+    .empty { padding: 34px 20px; text-align: center; background: #fff; border: 1px dashed #cfd5df; border-radius: 18px; color: var(--muted); }
+    @media (max-width: 640px) {
+      .shell { padding-top: 36px; }
+      form { flex-direction: column; }
+      button { min-height: 48px; }
+      .course-head { align-items: baseline; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="eyebrow">FDU Courses</div>
+    <h1>一句话查课</h1>
+    <p class="lead">不用登录，不用安装插件。直接描述时间、校区、学分、课程方向或老师。</p>
+
+    <section class="search-card">
+      <form id="search-form">
+        <input id="query" autocomplete="off" placeholder="例如：周三下午张江校区，3 学分以上的本科人工智能相关课程" />
+        <button id="submit" type="submit">查询</button>
+      </form>
+      <div class="examples" id="examples">
+        <span class="chip">周三下午张江的本科人工智能课</span>
+        <span class="chip">周四晚上江湾的研究生机器学习课</span>
+        <span class="chip">第5周星期二枫林有余量的2学分课</span>
+        <span class="chip">张三老师周一上午邯郸校区</span>
+      </div>
+    </section>
+
+    <div id="status" class="status"></div>
+    <div id="parsed" class="parsed"></div>
+    <section id="results" class="results"></section>
+
+    <div class="footer">
+      数据来自复旦大学教务服务系统公开查询接口。自然语言解析由本地规则完成，不需要把查询内容发送给第三方大模型。<br />
+      高级用户仍可使用 <a href="/mcp">MCP endpoint</a>；原始查询 API：<code>/api/ask?q=...</code>
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById('search-form');
+    const input = document.getElementById('query');
+    const submit = document.getElementById('submit');
+    const statusEl = document.getElementById('status');
+    const parsedEl = document.getElementById('parsed');
+    const resultsEl = document.getElementById('results');
+
+    const dayNames = {1:'周一',2:'周二',3:'周三',4:'周四',5:'周五',6:'周六',7:'周日'};
+    const filterLabels = {
+      keyword: v => `关键词：${v}`,
+      teacher: v => `教师：${v}`,
+      department: v => `院系：${v}`,
+      campus: v => v,
+      biz_type: v => v,
+      min_credits: v => `≥ ${v} 学分`,
+      max_credits: v => `≤ ${v} 学分`,
+      day: v => dayNames[v] || `星期 ${v}`,
+      period_start: v => `从第 ${v} 节`,
+      period_end: v => `到第 ${v} 节`,
+      week: v => `第 ${v} 周`,
+      has_syllabus: () => '有教学大纲',
+      available_only: () => '有余量',
+      limit: v => `最多 ${v} 门`,
+    };
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function renderParsed(parsed) {
+      parsedEl.replaceChildren();
+      Object.entries(parsed || {}).forEach(([key, value]) => {
+        if (filterLabels[key] && value !== null && value !== false) {
+          parsedEl.appendChild(el('span', 'tag', filterLabels[key](value)));
+        }
+      });
+    }
+
+    function renderCourse(course) {
+      const card = el('article', 'course');
+      const head = el('div', 'course-head');
+      head.appendChild(el('h2', '', course.name));
+      if (course.credits !== null) head.appendChild(el('span', 'credits', `${course.credits} 学分`));
+      card.appendChild(head);
+
+      const teacher = (course.teachers || []).join('、') || '教师未标注';
+      const campus = (course.campuses || []).join(' / ') || '校区未标注';
+      card.appendChild(el('div', 'meta', `${teacher} · ${course.department} · ${campus} · ${course.biz_type}`));
+
+      const sessions = el('div', 'sessions');
+      (course.sessions || []).forEach(s => {
+        const where = s.room ? ` · ${s.room}` : '';
+        const weeks = s.weeks_text ? ` · ${s.weeks_text}周` : '';
+        sessions.appendChild(el('div', 'session', `${s.day_name} 第${s.period_start}-${s.period_end}节${weeks}${where}`));
+      });
+      if (sessions.children.length) card.appendChild(sessions);
+      return card;
+    }
+
+    async function runSearch(query) {
+      const q = query.trim();
+      if (!q) return;
+      input.value = q;
+      submit.disabled = true;
+      statusEl.textContent = '正在查询…';
+      parsedEl.replaceChildren();
+      resultsEl.replaceChildren();
+      history.replaceState(null, '', `/ask?q=${encodeURIComponent(q)}`);
+
+      try {
+        const response = await fetch(`/api/ask?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || '查询失败');
+
+        renderParsed(data.parsed);
+        statusEl.textContent = `${data.semester || '当前学期'} · 找到 ${data.total} 个教学班，显示 ${data.returned} 个`;
+        if (!data.courses.length) {
+          resultsEl.appendChild(el('div', 'empty', '没有找到匹配课程。可以减少一个条件或换一个关键词。'));
+          return;
+        }
+        data.courses.forEach(course => resultsEl.appendChild(renderCourse(course)));
+      } catch (error) {
+        statusEl.textContent = `查询失败：${error.message}`;
+      } finally {
+        submit.disabled = false;
+      }
+    }
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      runSearch(input.value);
+    });
+
+    document.getElementById('examples').addEventListener('click', event => {
+      if (event.target.classList.contains('chip')) runSearch(event.target.textContent);
+    });
+
+    const initial = new URLSearchParams(location.search).get('q');
+    if (initial) runSearch(initial);
+  </script>
+</body>
+</html>
