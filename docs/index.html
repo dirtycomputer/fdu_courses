@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>复旦蹭课指南 · 全校开课查询</title>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <header class="site-header">
@@ -89,10 +89,27 @@
   </div>
 
   <footer class="site-footer">
-    数据来源:复旦大学教务服务系统「全校开课查询」(免登录接口),每学期用 <code>fetch/fetch.py</code> 重新生成。
-    点击「大纲」可在新窗口查看课程教学大纲。
+    <div>
+      数据来源:复旦大学教务服务系统「全校开课查询」(免登录接口),每学期用 <code>fetch/fetch.py</code> 重新生成。
+      点击「大纲」可在新窗口查看课程教学大纲。
+    </div>
+    <div class="room-legend">
+      <h3>教室地点缩写</h3>
+      <ul>
+        <li><code>H</code> 邯郸校区教学楼,H 后首数为楼号:H2 二教 / H3 三教 / H4 四教 / H5 五教 / H6 六教</li>
+        <li><code>HGX</code> 邯郸 · 光华楼(东 / 西主楼)</li>
+        <li><code>HQ</code> 邯郸院系场地(新闻学院蔡冠深报告厅、新媒体中心等)</li>
+        <li><code>F</code> 枫林校区教学楼,F 后首数为楼号</li>
+        <li><code>FKQ</code> 枫林 · 口腔医院教室</li>
+        <li><code>JA / JB</code> 江湾校区 A 楼 / B 楼</li>
+        <li><code>J</code> 江湾院系楼(交叉学科楼、上海数学中心等)</li>
+        <li><code>Z</code> 张江校区教学楼</li>
+        <li><code>X / TJ</code> 校外教学点(港陆广场、同济大学等)</li>
+        <li>无字母前缀 — 院系楼、会议室或「在线教学」,以文字原文为准</li>
+      </ul>
+    </div>
   </footer>
 
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

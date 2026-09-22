@@ -473,6 +473,32 @@ td.cell.past-period.h5 { --heat-x: var(--heat5); }
   color: var(--muted);
   font-size: 12px;
 }
+.room-legend { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 10px; }
+.room-legend h3 {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.room-legend ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 3px 24px;
+}
+.room-legend code {
+  display: inline-block;
+  min-width: 44px;
+  background: var(--accent-wash);
+  color: var(--accent-deep);
+  border-radius: 5px;
+  padding: 0 6px;
+  margin-right: 6px;
+  font: 600 11.5px/18px ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
 
 @media (max-width: 720px) {
   .site-header { padding: 10px 12px 8px; }
