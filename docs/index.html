@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>复旦蹭课指南 · 全校开课查询</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <h1>复旦蹭课指南</h1>
+      <div class="sub" id="head-sub">加载中…</div>
+    </div>
+    <div class="view-switch">
+      <button id="view-list" class="on">课程列表</button>
+      <button id="view-cal">课表日历</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input id="search-box" type="search" placeholder="搜索课程名 / 课程代码 / 教师…">
+    <div class="dd" id="dd-campus"></div>
+    <div class="dd" id="dd-biz"></div>
+    <div class="dd" id="dd-table"></div>
+    <div class="dd" id="dd-dept"></div>
+    <span class="day-btns" id="day-btns">
+      <button data-day="1">周一</button><button data-day="2">周二</button><button data-day="3">周三</button><button data-day="4">周四</button><button data-day="5">周五</button><button data-day="6">周六</button><button data-day="7">周日</button>
+    </span>
+    <button class="reset-btn" id="reset-btn">重置</button>
+  </div>
+
+  <main>
+    <section id="list-view">
+      <div class="result-line" id="result-line"></div>
+      <div class="list-wrap">
+        <div class="table-scroll">
+          <table class="courses">
+            <thead>
+              <tr>
+                <th>课程</th><th>教师</th><th>时间 · 地点</th><th>校区</th><th>开课单位</th><th>学位类型</th><th>教学大纲</th>
+              </tr>
+            </thead>
+            <tbody id="list-tbody"></tbody>
+          </table>
+        </div>
+        <div class="more-wrap" id="more-wrap"><button class="more-btn" id="more-btn">显示更多</button></div>
+      </div>
+    </section>
+
+    <section id="cal-view" style="display:none">
+      <div class="cal-wrap">
+        <div class="week-nav">
+          <button class="wn-btn" id="wn-prev" title="上一周">←</button>
+          <span class="wn-label" id="wn-label"></span>
+          <span class="wn-range" id="wn-range"></span>
+          <button class="wn-btn" id="wn-next" title="下一周">→</button>
+          <button class="wn-today" id="wn-today">回到本周</button>
+        </div>
+        <div class="cal-scroll">
+          <table class="cal">
+            <thead id="cal-thead"></thead>
+            <tbody id="cal-tbody"></tbody>
+          </table>
+        </div>
+        <div class="cal-legend">
+          <span>格子数字 = 该时段开课门数:</span>
+          <span class="sw" style="background:var(--heat1)"></span>1
+          <span class="sw" style="background:var(--heat2)"></span>2
+          <span class="sw" style="background:var(--heat3)"></span>3
+          <span class="sw" style="background:var(--heat4)"></span>4
+          <span class="sw" style="background:var(--heat5)"></span>5+
+          <span class="sw past"></span>已过去
+          <span>· 点击有课的格子查看课程</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-mask" id="modal-mask">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button class="modal-close" id="modal-close" title="关闭">×</button>
+      </div>
+      <div class="modal-filters" id="modal-filters"></div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    数据来源:复旦大学教务服务系统「全校开课查询」(免登录接口),每学期用 <code>fetch/fetch.py</code> 重新生成。
+    点击「大纲」可在新窗口查看课程教学大纲。
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
