@@ -98,7 +98,7 @@ def _course_filters(request: Request) -> dict[str, Any]:
     }
 
 
-@mcp.custom_route("/", methods=["GET"])
+@mcp.custom_route("/api/home", methods=["GET"])
 async def home(_: Request) -> HTMLResponse:
     if not WEB_INDEX.exists():
         return HTMLResponse("FDU Courses API", status_code=200)
