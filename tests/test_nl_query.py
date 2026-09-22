@@ -41,9 +41,9 @@ class NaturalLanguageQueryTests(unittest.TestCase):
         self.assertEqual(parsed["period_start"], 11)
         self.assertEqual(parsed["period_end"], 14)
 
-    def test_exact_credits_and_alias(self):
+    def test_exact_credits_preserves_literal_keyword(self):
         parsed = parse_natural_query("张江本科 AI 3 学分")
-        self.assertEqual(parsed["keyword"], "人工智能")
+        self.assertEqual(parsed["keyword"], "AI")
         self.assertEqual(parsed["min_credits"], 3.0)
         self.assertEqual(parsed["max_credits"], 3.0)
 
