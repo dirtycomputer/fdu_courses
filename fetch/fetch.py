@@ -15,7 +15,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from datetime import date, datetime
+from datetime import datetime, timedelta, timezone
 
 BASE = "https://fdjwgl.fudan.edu.cn"
 SEARCH_URL = BASE + "/student/for-all/lesson-search/semester/{sid}/search/{sid}"
@@ -133,6 +133,13 @@ def clean(s):
     return s.strip()
 
 
+BJ = timezone(timedelta(hours=8))
+
+
+def bj_now_str():
+    return datetime.now(BJ).strftime("%Y-%m-%d %H:%M")
+
+
 def course_record(row, campus_set, syllabus_ids, unparsed_lines):
     course = row.get("course") or {}
     raw = row.get("scheduleText", {}).get("dateTimePlacePersonText", {}).get("textZh", "") or ""
@@ -226,7 +233,7 @@ def main():
         "semester": args.name,
         "semesterId": sid,
         "week1Monday": args.start,
-        "generatedAt": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "generatedAt": bj_now_str(),
         "periodTimes": PERIOD_TIMES,
         "periodEndTimes": PERIOD_END_TIMES,
         "campusNames": [CAMPUS_NAMES[i] for i in sorted(CAMPUS_NAMES)],

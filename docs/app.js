@@ -28,7 +28,9 @@ function parseDate(s) { const [y, m, d] = s.split('-').map(Number); return new D
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 function fmtMD(d) { return (d.getMonth() + 1) + '/' + d.getDate(); }
 function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
-function today0() { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
+// 北京时间(UTC+8)当前时刻:钟面字段即北京时间的年月日时分秒,与访问者本地时区无关
+function bjNow() { return new Date(Date.now() + (480 + new Date().getTimezoneOffset()) * 60000); }
+function today0() { const n = bjNow(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
 
 function week1Monday() { return parseDate(DATA.week1Monday); }
 function dateOf(week, day) { return addDays(week1Monday(), (week - 1) * 7 + (day - 1)); }
@@ -198,7 +200,7 @@ function renderCalendar() {
   $('#wn-next').disabled = week >= 18;
 
   const today = today0();
-  const now = new Date();
+  const now = bjNow();
   const thead = $('#cal-thead'), tbody = $('#cal-tbody');
   let headHtml = '<th class="p-col">节次</th>';
   for (let d = 1; d <= 7; d++) {
@@ -228,7 +230,7 @@ function renderCalendar() {
   tbody.innerHTML = bodyHtml;
 }
 
-function parseHM(s) { const [h, m] = s.split(':').map(Number); const n = new Date(); n.setHours(h, m, 0, 0); return n; }
+function parseHM(s) { const [h, m] = s.split(':').map(Number); const n = bjNow(); n.setHours(h, m, 0, 0); return n; }
 
 function gotoWeek(w) {
   state.week = clampWeek(w);
