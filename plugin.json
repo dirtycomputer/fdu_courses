@@ -1,0 +1,13 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "fdu-courses",
+  "version": "1.0.0",
+  "description": "Search Fudan University courses by topic, teacher, campus, credits, weekday, period and teaching week.",
+  "author": {
+    "name": "dirtycomputer",
+    "url": "https://github.com/dirtycomputer"
+  },
+  "homepage": "https://fducourses.vercel.app/",
+  "repository": "https://github.com/dirtycomputer/fdu_courses",
+  "keywords": ["fudan", "courses", "education", "search", "mcp"]
+}
