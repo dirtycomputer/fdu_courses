@@ -19,6 +19,8 @@ from mcp.server.transport_security import TransportSecuritySettings  # noqa: E40
 from server.db import connect, resolve_db_path  # noqa: E402
 from server.import_data import DEFAULT_SOURCE, import_json  # noqa: E402
 from server.mcp_server import mcp  # noqa: E402
+from server.nl_query import parse_course_query  # noqa: E402
+from server.queries import search_courses  # noqa: E402
 
 
 def _ensure_database() -> None:
@@ -48,6 +50,35 @@ async def health(_: Request) -> JSONResponse:
             "generatedAt": metadata.get("generatedAt", ""),
             "courses": course_count,
             "mcp": "/mcp",
+            "ask": "/ask",
+        }
+    )
+
+
+@mcp.custom_route("/api/ask", methods=["GET"])
+async def ask(request: Request) -> JSONResponse:
+    query = request.query_params.get("q", "").strip()
+    if not query:
+        return JSONResponse(
+            {"error": "missing_query", "message": "Use /api/ask?q=周三下午张江人工智能"},
+            status_code=400,
+        )
+
+    try:
+        parsed = parse_course_query(query)
+        filters = parsed.filters()
+        result = search_courses(**filters)
+    except ValueError as exc:
+        return JSONResponse(
+            {"error": "invalid_query", "message": str(exc)},
+            status_code=400,
+        )
+
+    return JSONResponse(
+        {
+            "query": query,
+            "parsed": filters,
+            **result,
         }
     )
 
