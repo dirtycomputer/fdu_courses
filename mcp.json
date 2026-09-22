@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "fdu_courses": {
+      "type": "streamable-http",
+      "url": "https://fducourses.vercel.app/mcp"
+    }
+  }
+}
