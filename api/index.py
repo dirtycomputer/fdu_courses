@@ -171,7 +171,12 @@ async def ask(request: Request) -> Response:
             default_limit = int(body.get("limit") or 20)
 
         parsed = parse_natural_query(query, default_limit=default_limit)
-        result = search_courses(**parsed)
+        search_filters = dict(parsed)
+        # A free-text topic such as "AI" should match course names/codes, not a
+        # coincidental substring in a teacher name (e.g. Craig). Explicit
+        # "某某老师" queries are already parsed into the dedicated teacher field.
+        search_filters["keyword_includes_teacher"] = False
+        result = search_courses(**search_filters)
         return _json({
             "query": query,
             "parsed": parsed,
