@@ -29,6 +29,15 @@
   ],
   "headers": [
     {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</llms.txt>; rel=\"describedby\"; type=\"text/markdown\", </api-docs.md>; rel=\"alternate\"; type=\"text/markdown\""
+        }
+      ]
+    },
+    {
       "source": "/mcp",
       "headers": [
         {
