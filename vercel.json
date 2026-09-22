@@ -11,6 +11,14 @@
   },
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/docs/ask.html"
+    },
+    {
+      "source": "/ask",
+      "destination": "/docs/ask.html"
+    },
+    {
       "source": "/mcp",
       "destination": "/api/mcp"
     },
@@ -31,6 +39,15 @@
     },
     {
       "source": "/api/mcp",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/api/ask",
       "headers": [
         {
           "key": "Cache-Control",
