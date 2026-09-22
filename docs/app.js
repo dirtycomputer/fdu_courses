@@ -121,6 +121,8 @@ function makeDropdown(id, label, options, onChange, searchable) {
   const optsEl = $('.dd-opts', root);
   const btn = $('.dd-btn', root);
   const cnt = $('.cnt', root);
+  // 面板内点击(勾选、搜索)不冒泡到 document,否则会被"点击外部关闭"逻辑收起
+  root.addEventListener('click', e => e.stopPropagation());
   const render = (kw) => {
     optsEl.innerHTML = options
       .filter(o => !kw || o.toLowerCase().includes(kw))
