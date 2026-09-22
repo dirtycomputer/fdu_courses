@@ -427,6 +427,8 @@ td.cell.past-period.h5 { --heat-x: var(--heat5); }
   border-radius: 14px;
   width: min(760px, 100%);
   max-height: 88vh;
+  /* 弹层内筛选后结果骤减时,避免弹层高度塌缩导致下拉面板被裁、界面跳动 */
+  min-height: min(480px, 82vh);
   display: flex;
   flex-direction: column;
   overflow: hidden;

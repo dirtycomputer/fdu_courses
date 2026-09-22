@@ -17,6 +17,7 @@ let state = {
   listLimit: 300,
 };
 let modalCtx = null; // {day, period, filters:{bizTypes,campuses,depts}}
+const mainDropdowns = []; // 各筛选下拉实例,供「重置」清空闭包内的勾选状态
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
@@ -125,10 +126,13 @@ function makeDropdown(id, label, options, onChange, searchable) {
   const cnt = $('.cnt', root);
   // 面板内点击(勾选、搜索)不冒泡到 document,否则会被"点击外部关闭"逻辑收起
   root.addEventListener('click', e => e.stopPropagation());
+  // 已勾选的值保存在闭包 Set 中而非仅靠 DOM:
+  // 面板内搜索会重建/过滤选项,勾选状态必须跨重建保留
+  const selected = new Set();
   const render = (kw) => {
     optsEl.innerHTML = options
       .filter(o => !kw || o.toLowerCase().includes(kw))
-      .map(o => `<label><input type="checkbox" value="${escapeHtml(o)}">${escapeHtml(o)}</label>`).join('');
+      .map(o => `<label><input type="checkbox" value="${escapeHtml(o)}"${selected.has(o) ? ' checked' : ''}>${escapeHtml(o)}</label>`).join('');
   };
   render();
   if (searchable) {
@@ -144,12 +148,21 @@ function makeDropdown(id, label, options, onChange, searchable) {
   });
   root.addEventListener('change', e => {
     if (e.target.type !== 'checkbox') return;
-    const sel = new Set($$('input:checked', optsEl).map(i => i.value));
-    cnt.hidden = !sel.size;
-    cnt.textContent = sel.size;
-    btn.classList.toggle('has-sel', sel.size > 0);
-    onChange(sel);
+    if (e.target.checked) selected.add(e.target.value);
+    else selected.delete(e.target.value);
+    cnt.hidden = !selected.size;
+    cnt.textContent = selected.size;
+    btn.classList.toggle('has-sel', selected.size > 0);
+    onChange(new Set(selected));
   });
+  return {
+    reset() {
+      selected.clear();
+      render();
+      cnt.hidden = true;
+      btn.classList.remove('has-sel');
+    }
+  };
 }
 function closeAllDropdowns() { $$('.dd.open').forEach(d => d.classList.remove('open')); }
 document.addEventListener('click', closeAllDropdowns);
@@ -334,8 +347,7 @@ function resetFilters() {
   state.q = '';
   state.campuses.clear(); state.bizTypes.clear(); state.tableTypes.clear(); state.depts.clear(); state.days.clear();
   $('#search-box').value = '';
-  $$('.dd[data-main] .dd-btn').forEach(b => { b.classList.remove('has-sel'); const c = $('.cnt', b); c.hidden = true; });
-  $$('.dd[data-main] input[type=checkbox]').forEach(i => { i.checked = false; });
+  mainDropdowns.forEach(d => d.reset());
   $$('.day-btns button').forEach(b => b.classList.remove('on'));
   refresh();
 }
@@ -348,10 +360,10 @@ async function init() {
 
   const params = new URLSearchParams(location.search);
 
-  makeDropdown('dd-campus', '校区', DATA.campusNames, v => { state.campuses = v; refresh(); });
-  makeDropdown('dd-biz', '学位类型', DATA.bizTypes, v => { state.bizTypes = v; refresh(); });
-  makeDropdown('dd-table', '课程层级', [...new Set(DATA.courses.map(c => c.tableType).filter(Boolean))].sort(), v => { state.tableTypes = v; refresh(); });
-  makeDropdown('dd-dept', '开课单位', DATA.departments, v => { state.depts = v; refresh(); }, true);
+  mainDropdowns.push(makeDropdown('dd-campus', '校区', DATA.campusNames, v => { state.campuses = v; refresh(); }));
+  mainDropdowns.push(makeDropdown('dd-biz', '学位类型', DATA.bizTypes, v => { state.bizTypes = v; refresh(); }));
+  mainDropdowns.push(makeDropdown('dd-table', '课程层级', [...new Set(DATA.courses.map(c => c.tableType).filter(Boolean))].sort(), v => { state.tableTypes = v; refresh(); }));
+  mainDropdowns.push(makeDropdown('dd-dept', '开课单位', DATA.departments, v => { state.depts = v; refresh(); }, true));
   $$('.toolbar .dd').forEach(d => d.setAttribute('data-main', '1'));
 
   $('#search-box').addEventListener('input', collectFiltersFromUI);
