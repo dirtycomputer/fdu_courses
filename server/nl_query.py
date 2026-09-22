@@ -76,17 +76,7 @@ def _clean_keyword(text: str) -> str | None:
     # because they may be part of an actual course name such as “课程设计”.
     cleaned = re.sub(r"(?:相关的?|的)?课程?\s*$", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" 的地得")
-    if not cleaned:
-        return None
-
-    aliases = {
-        "ai": "人工智能",
-        "ml": "机器学习",
-    }
-    parts = []
-    for token in cleaned.split():
-        parts.append(aliases.get(token.lower(), token))
-    return " ".join(parts) or None
+    return cleaned or None
 
 
 def _teacher_name(raw: str) -> str | None:
