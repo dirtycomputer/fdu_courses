@@ -1,0 +1,30 @@
+# FDU Courses
+
+> Public, read-only Fudan University course search service. It supports zero-install natural-language queries, structured REST queries, course details, and an MCP endpoint. No login or API key is required.
+
+Use the REST API when you can make ordinary HTTP requests. For a Chinese natural-language request, prefer `GET /api/ask?q=...` or `POST /api/ask` and inspect the returned `parsed` object before relying on the matches. For deterministic filters, use `GET /api/courses`. Use `/mcp` only in clients that natively support MCP.
+
+The service contains teaching-class data for the semester reported by `/health`. Course matching is performed against a local SQLite database generated from Fudan's public course-search data.
+
+## Agent entry points
+
+- [OpenAPI schema](https://fducourses.vercel.app/openapi.json): Machine-readable REST API description.
+- [API documentation](https://fducourses.vercel.app/api-docs.md): Concise usage guide and examples.
+- [Natural-language query](https://fducourses.vercel.app/api/ask?q=AI): Send a Chinese course-search request; returns parsed filters and matching courses.
+- [Structured course search](https://fducourses.vercel.app/api/courses?limit=5): Query by campus, degree type, weekday, period, week, credits, teacher, department and other filters.
+- [Health and data version](https://fducourses.vercel.app/health): Current semester, data generation time and course count.
+- [MCP endpoint](https://fducourses.vercel.app/mcp): Streamable HTTP MCP for tool-capable clients.
+
+## Query guidance
+
+- `day`: 1=Monday through 7=Sunday.
+- `period_start` / `period_end`: periods 1 through 14. A class matches when its session overlaps the requested interval.
+- Natural-language dayparts map approximately to morning=1-5, noon=5-6, afternoon=6-10, evening=11-14.
+- `week` filters teaching week and is checked against the same session as weekday/period filters.
+- `limit` is capped at 50.
+- Free-text topic keywords in `/api/ask` search course names and course/class codes. Explicit phrases such as `张三老师` use the teacher filter.
+- The API is public and read-only. Do not infer enrollment eligibility beyond fields explicitly returned by the service.
+
+## Human interface
+
+- [FDU Courses](https://fducourses.vercel.app/): Zero-install browser search page.
