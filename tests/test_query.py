@@ -110,12 +110,35 @@ class QueryTests(unittest.TestCase):
         result = search_courses(available_only=True, db_path=self.db)
         self.assertEqual([c["id"] for c in result["courses"]], [1])
 
+    def test_live_enrollment_overrides_availability(self) -> None:
+        live = {
+            1: {"limit": 60, "enrolled": 60},
+            2: {"limit": 30, "enrolled": 29},
+        }
+        result = search_courses(
+            available_only=True,
+            enrollment_overrides=live,
+            db_path=self.db,
+        )
+        self.assertEqual(result["total"], 1)
+        self.assertEqual([c["id"] for c in result["courses"]], [2])
+        self.assertEqual(result["courses"][0]["enrolled"], 29)
+
     def test_get_course_by_course_code(self) -> None:
         result = get_course("COMP130001", db_path=self.db)
         self.assertEqual(result["found"], 1)
         course = result["courses"][0]
         self.assertTrue(course["has_syllabus"])
         self.assertEqual(course["sessions"][0]["weeks_text"], "1,3,5")
+
+    def test_get_course_uses_live_enrollment_override(self) -> None:
+        result = get_course(
+            "COMP130001",
+            db_path=self.db,
+            enrollment_overrides={1: {"limit": 61, "enrolled": 58}},
+        )
+        self.assertEqual(result["courses"][0]["limit"], 61)
+        self.assertEqual(result["courses"][0]["enrolled"], 58)
 
 
 if __name__ == "__main__":

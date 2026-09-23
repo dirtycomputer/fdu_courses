@@ -29,6 +29,7 @@ class EnrollmentSnapshot:
     updated_at: str
     fresh: bool
     ttl_seconds: int
+    error: str | None = None
 
 
 def _ttl_seconds() -> int:
@@ -78,12 +79,15 @@ def _decode_values(raw: dict[str, Any]) -> dict[int, dict[str, int | None]]:
     return out
 
 
-def _snapshot_from_payload(payload: dict[str, Any], ttl: int, *, fresh: bool) -> EnrollmentSnapshot:
+def _snapshot_from_payload(
+    payload: dict[str, Any], ttl: int, *, fresh: bool, error: str | None = None
+) -> EnrollmentSnapshot:
     return EnrollmentSnapshot(
         values=_decode_values(payload.get("values") or {}),
         updated_at=str(payload.get("updated_at") or ""),
         fresh=fresh,
         ttl_seconds=ttl,
+        error=error,
     )
 
 
@@ -142,7 +146,7 @@ def get_enrollment_snapshot(
     Cache is kept both in process memory and in /tmp so warm Vercel invocations can
     reuse the same upstream response. If Fudan's endpoint is temporarily
     unavailable, the latest stale cache is returned when possible; callers can
-    inspect ``fresh`` to decide how to label the result.
+    inspect ``fresh`` and ``error`` to decide how to label the result.
     """
     global _MEMORY
 
@@ -167,11 +171,18 @@ def get_enrollment_snapshot(
 
         try:
             payload = _fetch(semester_id)
-        except Exception:
+        except Exception as exc:
+            error = f"{exc.__class__.__name__}: {exc}"
             if stale:
                 _MEMORY = stale
-                return _snapshot_from_payload(stale, ttl, fresh=False)
-            return EnrollmentSnapshot(values={}, updated_at="", fresh=False, ttl_seconds=ttl)
+                return _snapshot_from_payload(stale, ttl, fresh=False, error=error)
+            return EnrollmentSnapshot(
+                values={},
+                updated_at="",
+                fresh=False,
+                ttl_seconds=ttl,
+                error=error,
+            )
 
         _MEMORY = payload
         try:

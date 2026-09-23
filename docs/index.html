@@ -6,6 +6,7 @@
   <title>复旦蹭课指南 · 全校开课查询</title>
   <link rel="stylesheet" href="style.css?v=5">
   <link rel="stylesheet" href="ios-fixes.css?v=1">
+  <link rel="stylesheet" href="ai-tools.css?v=1">
 </head>
 <body>
   <header class="site-header">
@@ -16,6 +17,7 @@
     <div class="view-switch">
       <button id="view-list" class="on">课程列表</button>
       <button id="view-cal">课表日历</button>
+      <button id="view-ai">AI工具查询指令</button>
     </div>
   </header>
 
@@ -76,6 +78,56 @@
         </div>
       </div>
     </section>
+
+    <section id="ai-view" style="display:none">
+      <div class="ai-wrap">
+        <div class="ai-hero">
+          <h2>AI工具查询指令</h2>
+          <p>把下面的指令直接复制到支持联网或网页访问的 AI 工具中，即可让它调用 FDU Courses 查询课程。通用指令适用于 ChatGPT、Claude、豆包、DeepSeek 等工具。</p>
+          <div class="ai-platforms">
+            <span>ChatGPT</span><span>Claude</span><span>豆包</span><span>DeepSeek</span><span>Gemini</span><span>Kimi</span>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-head">
+            <h3>推荐：完整通用指令</h3>
+            <button class="ai-copy" type="button" data-copy-target="ai-prompt-full">复制指令</button>
+          </div>
+          <pre class="ai-prompt" id="ai-prompt-full">请先读取 https://fducourses.vercel.app/llms.txt，并严格按照其中的接口说明查询复旦大学当前学期课程。
+
+我的查询需求是：【在这里填写你的需求】
+
+要求：
+1. 不要凭记忆回答课程信息，必须实际访问 FDU Courses API。
+2. 优先使用 /api/ask 解析自然语言，并检查返回的 parsed 是否符合我的真实意图；如果解析不准确，请改用 /api/courses 结构化查询。
+3. 课程名称、教师、校区、时间、学分等信息以 API 返回为准。
+4. 已选人数和容量使用 API 返回的 enrolled / limit；请同时告诉我 enrollment_updated_at。该人数最多缓存 5 分钟。
+5. 如果我要求“有余量”，必须根据最新 enrolled &lt; limit 判断，不要根据旧数据自行推断。
+6. 返回结果时优先列出：课程名称、教师、学分、学位类型、校区、星期/节次、教室、教学周、已选人数/容量、教学大纲链接（如有）。
+7. 请同时说明 semester、generated_at 和 enrollment_updated_at，以便我判断课程结构数据和人数数据的新鲜度。
+8. 如果没有完全匹配的课程，请明确说明没有匹配结果，可以建议放宽哪些条件，但不要虚构课程。
+9. 如果你当前无法访问该 URL 或无法联网，请直接说明无法执行实时查询，不要根据训练数据猜测。</pre>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-head">
+            <h3>快速版：一句话直接查</h3>
+            <button class="ai-copy" type="button" data-copy-target="ai-prompt-short">复制指令</button>
+          </div>
+          <pre class="ai-prompt" id="ai-prompt-short">请读取 https://fducourses.vercel.app/llms.txt，然后帮我查询：【在这里填写你的课程需求】。必须实际调用接口，不要凭记忆回答；请核对 parsed，并在结果中给出 enrollment_updated_at 和最新 enrolled / limit。</pre>
+          <ul class="ai-examples">
+            <li>周三下午邯郸校区 2 学分以上的本科数学相关课程。</li>
+            <li>张江校区周五晚上有余量的研究生 AI 相关课程，最多 10 门。</li>
+            <li>找王老师本学期的课程，并列出完整上课时间和当前选课人数。</li>
+          </ul>
+        </div>
+
+        <div class="ai-note">
+          <strong>注意：</strong>不同 AI 产品、套餐或模式的联网能力不同。如果工具无法打开 <code>fducourses.vercel.app</code>，它就无法完成真实查询。此时可以直接使用本站课程列表/课表，或打开 <code>https://fducourses.vercel.app/</code> 的零安装查询页。
+        </div>
+      </div>
+    </section>
   </main>
 
   <div class="modal-mask" id="modal-mask">
@@ -112,5 +164,6 @@
   </footer>
 
   <script src="app.js?v=6"></script>
+  <script src="ai-tools.js?v=1"></script>
 </body>
 </html>

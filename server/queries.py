@@ -91,6 +91,28 @@ def _serialize_course(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, A
     }
 
 
+def _apply_enrollment(
+    course: dict[str, Any],
+    enrollment_overrides: dict[int, dict[str, int | None]] | None,
+) -> dict[str, Any]:
+    if not enrollment_overrides:
+        return course
+    live = enrollment_overrides.get(int(course["id"]))
+    if not live:
+        return course
+    course["enrolled"] = live.get("enrolled")
+    course["limit"] = live.get("limit")
+    return course
+
+
+def _has_availability(course: dict[str, Any]) -> bool:
+    return (
+        course.get("limit") is not None
+        and course.get("enrolled") is not None
+        and int(course["enrolled"]) < int(course["limit"])
+    )
+
+
 def search_courses(
     *,
     keyword: str | None = None,
@@ -109,6 +131,7 @@ def search_courses(
     available_only: bool = False,
     limit: int = 20,
     db_path: str | Path | None = None,
+    enrollment_overrides: dict[int, dict[str, int | None]] | None = None,
 ) -> dict[str, Any]:
     """Search teaching classes using structured filters.
 
@@ -116,6 +139,11 @@ def search_courses(
     a class matches when its session overlaps that range. Keyword matching can
     optionally include teacher names; dedicated teacher filtering is always
     available through the ``teacher`` argument.
+
+    ``enrollment_overrides`` can provide fresher ``enrolled``/``limit`` values.
+    When ``available_only`` is requested, availability is evaluated after these
+    overrides are applied, so stale snapshot counts never exclude a newly-opened
+    seat before live data has been considered.
     """
     _validate_range("day", day, 1, 7)
     _validate_range("period_start", period_start, 1, 14)
@@ -180,8 +208,6 @@ def search_courses(
     if has_syllabus is not None:
         clauses.append("c.has_syllabus=?")
         params.append(1 if has_syllabus else 0)
-    if available_only:
-        clauses.append("c.limit_count IS NOT NULL AND c.enrolled IS NOT NULL AND c.enrolled < c.limit_count")
 
     if any(v is not None for v in (day, period_start, period_end, week)):
         session_clauses = ["s.course_id=c.id"]
@@ -205,23 +231,47 @@ def search_courses(
         clauses.append("EXISTS (SELECT 1 FROM sessions s WHERE " + " AND ".join(session_clauses) + ")")
 
     where_sql = " AND ".join(clauses)
-    select_sql = f"SELECT c.* FROM courses c WHERE {where_sql} ORDER BY c.name, c.code LIMIT ?"
+    base_select_sql = f"SELECT c.* FROM courses c WHERE {where_sql} ORDER BY c.name, c.code"
     count_sql = f"SELECT COUNT(*) FROM courses c WHERE {where_sql}"
 
     with connect(db_path) as conn:
-        total = int(conn.execute(count_sql, params).fetchone()[0])
-        rows = conn.execute(select_sql, [*params, limit]).fetchall()
         meta = _metadata(conn)
+
+        if available_only:
+            rows = conn.execute(base_select_sql, params).fetchall()
+            available = [
+                course
+                for course in (
+                    _apply_enrollment(_serialize_course(conn, row), enrollment_overrides)
+                    for row in rows
+                )
+                if _has_availability(course)
+            ]
+            total = len(available)
+            courses = available[:limit]
+        else:
+            total = int(conn.execute(count_sql, params).fetchone()[0])
+            rows = conn.execute(base_select_sql + " LIMIT ?", [*params, limit]).fetchall()
+            courses = [
+                _apply_enrollment(_serialize_course(conn, row), enrollment_overrides)
+                for row in rows
+            ]
+
         return {
             "semester": meta.get("semester", ""),
             "generated_at": meta.get("generatedAt", ""),
             "total": total,
-            "returned": len(rows),
-            "courses": [_serialize_course(conn, row) for row in rows],
+            "returned": len(courses),
+            "courses": courses,
         }
 
 
-def get_course(identifier: str | int, *, db_path: str | Path | None = None) -> dict[str, Any]:
+def get_course(
+    identifier: str | int,
+    *,
+    db_path: str | Path | None = None,
+    enrollment_overrides: dict[int, dict[str, int | None]] | None = None,
+) -> dict[str, Any]:
     """Get one teaching class by id/code, or all teaching classes for a course code."""
     text = str(identifier).strip()
     if not text:
@@ -241,5 +291,8 @@ def get_course(identifier: str | int, *, db_path: str | Path | None = None) -> d
             "semester": meta.get("semester", ""),
             "generated_at": meta.get("generatedAt", ""),
             "found": len(rows),
-            "courses": [_serialize_course(conn, row) for row in rows],
+            "courses": [
+                _apply_enrollment(_serialize_course(conn, row), enrollment_overrides)
+                for row in rows
+            ],
         }

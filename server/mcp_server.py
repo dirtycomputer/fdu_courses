@@ -6,6 +6,7 @@ from typing import Literal
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
+from .enrollment import get_enrollment_snapshot
 from .queries import get_course as query_get_course
 from .queries import search_courses as query_search_courses
 
@@ -18,8 +19,20 @@ mcp = MCPServer(
         "查询复旦大学当前学期开课信息。优先使用结构化筛选；"
         "day 使用 1=周一 ... 7=周日；节次为 1-14。"
         "下午通常对应第 6-10 节，晚上通常对应第 11-14 节。"
+        "选课人数与容量会从复旦公开课程接口刷新，并缓存 5 分钟；"
+        "响应中的 enrollment_updated_at 表示人数更新时间。"
     ),
 )
+
+
+def _with_enrollment_meta(result: dict, snapshot) -> dict:
+    result["enrollment_updated_at"] = snapshot.updated_at or result.get("generated_at", "")
+    if snapshot.values:
+        result["enrollment_source"] = "live-cache" if snapshot.fresh else "stale-cache"
+    else:
+        result["enrollment_source"] = "snapshot"
+    result["enrollment_cache_ttl_seconds"] = snapshot.ttl_seconds
+    return result
 
 
 @mcp.tool()
@@ -45,10 +58,11 @@ def search_courses(
     day: 1=周一 ... 7=周日。
     period_start/period_end: 1-14；同时提供时按时间段重叠查询。
     week: 教学周。
-    available_only: 仅返回人数上限与已选人数均已知且尚未满员的教学班。
+    available_only: 按最近 5 分钟内刷新的人数，仅返回尚未满员的教学班。
     单次最多返回 50 个教学班。
     """
-    return query_search_courses(
+    snapshot = get_enrollment_snapshot()
+    result = query_search_courses(
         keyword=keyword,
         teacher=teacher,
         department=department,
@@ -63,13 +77,17 @@ def search_courses(
         has_syllabus=has_syllabus,
         available_only=available_only,
         limit=limit,
+        enrollment_overrides=snapshot.values,
     )
+    return _with_enrollment_meta(result, snapshot)
 
 
 @mcp.tool()
 def get_course(identifier: str) -> dict:
-    """按教学班 ID、教学班代码或课程代码获取课程详情与完整上课安排。"""
-    return query_get_course(identifier)
+    """按教学班 ID、教学班代码或课程代码获取课程详情、完整上课安排和最新人数。"""
+    snapshot = get_enrollment_snapshot()
+    result = query_get_course(identifier, enrollment_overrides=snapshot.values)
+    return _with_enrollment_meta(result, snapshot)
 
 
 def _transport_security() -> TransportSecuritySettings | None:
