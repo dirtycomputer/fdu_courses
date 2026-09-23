@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FDU Courses query filters",
+  "description": "由调用方 LLM 理解自然语言并生成此对象；服务端仅校验和执行查询。省略未指定的条件，不传 null。所有字段以 AND 组合。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "keyword": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "课程名称或代码的字面关键词。空格分词后以 AND 匹配。不填所有、本学期、输出格式等修饰语。教师使用 teacher。"
+    },
+    "teacher": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "教师姓名或明确给定的姓名片段，不含老师、教授等称谓。"
+    },
+    "department": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "campus": {
+      "type": "string",
+      "enum": [
+        "邯郸校区",
+        "张江校区",
+        "枫林校区",
+        "江湾校区",
+        "其他校区"
+      ]
+    },
+    "biz_type": {
+      "type": "string",
+      "enum": [
+        "本科",
+        "研究生",
+        "本研融通"
+      ]
+    },
+    "min_credits": {
+      "type": "number",
+      "minimum": 0
+    },
+    "max_credits": {
+      "type": "number",
+      "minimum": 0
+    },
+    "day": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 7,
+      "description": "1=周一，7=周日。"
+    },
+    "period_start": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 14
+    },
+    "period_end": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 14,
+      "description": "节次按区间重叠匹配。星期、节次、教学周必须匹配同一个上课安排。"
+    },
+    "week": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30
+    },
+    "has_syllabus": {
+      "type": "boolean"
+    },
+    "available_only": {
+      "type": "boolean",
+      "description": "按最新可用的人数数据筛选 enrolled < limit；需检查响应的数据来源及更新时间。"
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 20
+    },
+    "offset": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "分页偏移；查询所有结果时按 returned 递增，直到没有更多结果。",
+      "maximum": 2147483647
+    }
+  }
+}

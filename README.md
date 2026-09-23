@@ -33,6 +33,7 @@ fetch/
 server/
 ├── db.py              SQLite 连接
 ├── import_data.py     latest.json → SQLite
+├── query_contract.py  LLM 查询 JSON 校验
 ├── queries.py         结构化课程查询
 └── mcp_server.py      MCP tools
 api/
@@ -72,6 +73,14 @@ python3 -m http.server 8765 --directory docs
 ## AI / MCP 查询
 
 课程数据可以导入 SQLite,再通过 MCP 暴露给 ChatGPT、Claude、Cursor 等支持 MCP 的客户端。模型只负责把自然语言转换成结构化筛选参数,课程匹配、周次和节次判断由 SQLite 完成。
+
+### AI 工具查询指令
+
+在静态页面选择“AI工具查询指令”，输入需求并复制 Prompt。由所选 AI 工具自身的 LLM 理解需求，生成符合 `docs/query-schema.json` 的 JSON，再调用 `POST /api/courses` 或 `GET /api/courses?filters=<编码后的JSON>`。服务端仅校验并执行，不做正则或关键词式自然语言解析，也不需要另外配置 LLM API key。
+
+例如“查询黄萱菁老师的所有课程”应由模型生成 `{"teacher":"黄萱菁","limit":50}`，不将“所有”作为课程关键词。无法访问接口的 AI 仍可生成 JSON，用户可粘贴回页面生成接口链接。未知字段、错误类型及矛盾区间会返回 400；多页查询通过 `offset` 和 `has_more` 完成。
+
+**接口迁移**：旧 `/api/ask?q=自然语言` 和 `POST /api/ask {"query":"..."}` 已移除；`/api/ask` 仅保留为结构化 JSON 的兼容 URL。调用方需改为先由 LLM 生成 JSON。完整协议见 [API.md](API.md)。
 
 ### 安装
 
@@ -178,8 +187,18 @@ Vercel 入口使用 `stateless_http=True` + JSON response,适合 Serverless/Flui
 ### 测试
 
 ```bash
+pip install -e '.[test]'
 python -m unittest discover -s tests -v
 ```
+
+前端指令与交互回归测试（已在 Node.js 24.19 验证）：
+
+```bash
+npm --prefix tests ci
+npm --prefix tests test
+```
+
+查询格式以 `server/query-schema.json` 为准；更新时同步 `docs/query-schema.json`，测试会校验两者一致。
 
 自然语言示例:
 

@@ -5,7 +5,7 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "includeFiles": "{data/courses.db,docs/data/latest.json,web/index.html}",
+      "includeFiles": "{data/courses.db,docs/data/latest.json,server/query-schema.json,web/index.html}",
       "excludeFiles": "{tests/**,fetch/**,docs/index.html,docs/app.js,docs/style.css}"
     }
   },

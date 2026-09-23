@@ -9,7 +9,11 @@ description = "SQLite query layer and MCP server for Fudan University course dat
 requires-python = ">=3.10"
 dependencies = [
   "mcp>=2,<3",
+  "jsonschema>=4.18,<5",
 ]
+
+[project.optional-dependencies]
+test = ["httpx>=0.27,<1"]
 
 [project.scripts]
 fdu-courses-import = "server.import_data:main"
@@ -17,3 +21,6 @@ fdu-courses-mcp = "server.mcp_server:main"
 
 [tool.setuptools]
 packages = ["server"]
+
+[tool.setuptools.package-data]
+server = ["query-schema.json"]

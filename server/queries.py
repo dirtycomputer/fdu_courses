@@ -130,6 +130,7 @@ def search_courses(
     has_syllabus: bool | None = None,
     available_only: bool = False,
     limit: int = 20,
+    offset: int = 0,
     db_path: str | Path | None = None,
     enrollment_overrides: dict[int, dict[str, int | None]] | None = None,
 ) -> dict[str, Any]:
@@ -154,6 +155,8 @@ def search_courses(
     if min_credits is not None and max_credits is not None and min_credits > max_credits:
         raise ValueError("min_credits cannot be greater than max_credits")
     limit = max(1, min(int(limit), 50))
+    if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+        raise ValueError("offset must be a non-negative integer")
 
     clauses = ["1=1"]
     params: list[Any] = []
@@ -248,10 +251,10 @@ def search_courses(
                 if _has_availability(course)
             ]
             total = len(available)
-            courses = available[:limit]
+            courses = available[offset:offset + limit]
         else:
             total = int(conn.execute(count_sql, params).fetchone()[0])
-            rows = conn.execute(base_select_sql + " LIMIT ?", [*params, limit]).fetchall()
+            rows = conn.execute(base_select_sql + " LIMIT ? OFFSET ?", [*params, limit, offset]).fetchall()
             courses = [
                 _apply_enrollment(_serialize_course(conn, row), enrollment_overrides)
                 for row in rows
@@ -262,6 +265,8 @@ def search_courses(
             "generated_at": meta.get("generatedAt", ""),
             "total": total,
             "returned": len(courses),
+            "offset": offset,
+            "has_more": offset + len(courses) < total,
             "courses": courses,
         }
 
