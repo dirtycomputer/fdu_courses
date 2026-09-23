@@ -1,0 +1,101 @@
+/* AI 工具查询指令视图 */
+.ai-wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 18px 18px 48px;
+}
+.ai-hero {
+  margin-bottom: 16px;
+}
+.ai-hero h2 {
+  margin: 0 0 6px;
+  font-size: 21px;
+}
+.ai-hero p {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.7;
+}
+.ai-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.ai-platforms span {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.ai-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 12px;
+}
+.ai-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ai-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.ai-copy {
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--accent-deep);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ai-copy.copied {
+  background: var(--accent-wash);
+}
+.ai-prompt {
+  margin: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--page);
+  color: var(--ink);
+  font: 13px/1.75 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.ai-note {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-wash);
+  color: var(--ink-2);
+  line-height: 1.7;
+  border-radius: 0 8px 8px 0;
+}
+.ai-note strong { color: var(--ink); }
+.ai-examples {
+  margin: 9px 0 0;
+  padding-left: 20px;
+  color: var(--ink-2);
+  line-height: 1.8;
+}
+
+@media (max-width: 720px) {
+  .ai-wrap { padding: 14px 12px 36px; }
+  .ai-card { padding: 12px; }
+  .ai-card-head { align-items: flex-start; }
+  .ai-copy { min-height: 40px; }
+  .ai-prompt { font-size: 12.5px; }
+  .view-switch { max-width: 100%; overflow-x: auto; }
+  .view-switch button { flex: 0 0 auto; padding-left: 12px; padding-right: 12px; }
+}
