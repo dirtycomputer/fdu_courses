@@ -106,6 +106,8 @@ def _attach_enrollment_metadata(result: dict[str, Any], snapshot: Any) -> dict[s
     else:
         result["enrollment_source"] = "snapshot"
     result["enrollment_cache_ttl_seconds"] = snapshot.ttl_seconds
+    if snapshot.error:
+        result["enrollment_error"] = snapshot.error
     return result
 
 
