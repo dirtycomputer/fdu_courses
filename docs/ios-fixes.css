@@ -1,0 +1,62 @@
+/* iOS / narrow-screen compatibility fixes.
+ *
+ * WebKit can clip positioned descendants when they live inside sticky/fixed
+ * containers with overflow. The course filters use absolutely positioned
+ * dropdown panels, while the calendar modal intentionally clips overflow.
+ * On small screens, render open dropdowns as viewport-level bottom sheets and
+ * remove modal clipping so every option stays reachable.
+ */
+
+@media (max-width: 720px) {
+  .dd.open {
+    z-index: 140;
+  }
+
+  .dd.open .dd-panel {
+    position: fixed;
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: 62vh;
+    max-height: 62dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    z-index: 200;
+    padding: 10px;
+    border-radius: 14px;
+    box-shadow: 0 18px 56px rgba(15, 23, 42, 0.28);
+  }
+
+  /* Avoid iOS Safari clipping a fixed dropdown through the modal boundary. */
+  .modal {
+    overflow: visible;
+  }
+
+  .modal-body {
+    min-height: 0;
+  }
+
+  /* 16px prevents Safari from zooming the page when focusing searchable menus. */
+  .dd-panel .dd-search {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .dd-panel label {
+    min-height: 44px;
+    padding: 9px 10px;
+    font-size: 16px;
+    white-space: normal;
+  }
+
+  .dd-panel input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+  }
+}
