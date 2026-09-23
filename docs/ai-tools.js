@@ -135,7 +135,7 @@
   }
 
   function makeAskUrl(query) {
-    return `${API_BASE}/api/ask?q=${encodeURIComponent(query)}&limit=20`;
+    return `${API_BASE}/api/ask?q=${encodeURIComponent(query)}&limit=50`;
   }
 
   function renderPlatform() {
