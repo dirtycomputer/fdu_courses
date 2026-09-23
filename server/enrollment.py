@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 import threading
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,6 +19,8 @@ SEARCH_URL = (
     "https://fdjwgl.fudan.edu.cn/student/for-all/lesson-search/semester/{sid}/search/{sid}"
 )
 DEFAULT_TTL_SECONDS = 300
+DEFAULT_PAGE_SIZE = 2000
+DEFAULT_PAGE_WORKERS = 4
 DEFAULT_CACHE_FILE = Path(tempfile.gettempdir()) / "fdu-courses-enrollment-cache.json"
 BJ = timezone(timedelta(hours=8))
 _LOCK = threading.Lock()
@@ -38,6 +42,22 @@ def _ttl_seconds() -> int:
         return max(30, int(raw))
     except ValueError:
         return DEFAULT_TTL_SECONDS
+
+
+def _page_size() -> int:
+    raw = os.environ.get("FDU_ENROLLMENT_PAGE_SIZE", str(DEFAULT_PAGE_SIZE))
+    try:
+        return max(200, min(5000, int(raw)))
+    except ValueError:
+        return DEFAULT_PAGE_SIZE
+
+
+def _page_workers() -> int:
+    raw = os.environ.get("FDU_ENROLLMENT_PAGE_WORKERS", str(DEFAULT_PAGE_WORKERS))
+    try:
+        return max(1, min(8, int(raw)))
+    except ValueError:
+        return DEFAULT_PAGE_WORKERS
 
 
 def _cache_file() -> Path:
@@ -107,8 +127,8 @@ def _save_disk(payload: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def _fetch(semester_id: str) -> dict[str, Any]:
-    url = SEARCH_URL.format(sid=semester_id) + "?queryPage__=1,20000"
+def _fetch_page(semester_id: str, page: int, page_size: int) -> dict[str, Any]:
+    url = SEARCH_URL.format(sid=semester_id) + f"?queryPage__={page},{page_size}"
     req = urllib.request.Request(
         url,
         headers={
@@ -116,10 +136,38 @@ def _fetch(semester_id: str) -> dict[str, Any]:
             "Accept": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=25) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            last_error = exc
+            if attempt == 0:
+                time.sleep(0.4)
+    assert last_error is not None
+    raise last_error
 
-    rows = body.get("data") or []
+
+def _fetch(semester_id: str) -> dict[str, Any]:
+    page_size = _page_size()
+    first = _fetch_page(semester_id, 1, page_size)
+    first_rows = first.get("data") or []
+    page_meta = first.get("_page_") or {}
+    total_rows = int(page_meta.get("totalRows") or len(first_rows))
+    page_count = max(1, math.ceil(total_rows / page_size))
+
+    rows = list(first_rows)
+    if page_count > 1:
+        workers = min(_page_workers(), page_count - 1)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            pages = list(pool.map(
+                lambda page: _fetch_page(semester_id, page, page_size),
+                range(2, page_count + 1),
+            ))
+        for body in pages:
+            rows.extend(body.get("data") or [])
+
     values: dict[str, dict[str, int | None]] = {}
     for row in rows:
         if row.get("id") is None:
@@ -128,6 +176,9 @@ def _fetch(semester_id: str) -> dict[str, Any]:
             "enrolled": int(row["stdCount"]) if row.get("stdCount") is not None else None,
             "limit": int(row["limitCount"]) if row.get("limitCount") is not None else None,
         }
+
+    if total_rows and len(values) < min(total_rows, 1):
+        raise RuntimeError("live enrollment endpoint returned no usable course rows")
 
     now = datetime.now(BJ)
     return {
