@@ -18,6 +18,7 @@ if not BUNDLED_DB.exists():
 from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 
 from server.db import connect, resolve_db_path  # noqa: E402
+from server.enrollment import get_enrollment_snapshot  # noqa: E402
 from server.import_data import DEFAULT_SOURCE, import_json  # noqa: E402
 from server.mcp_server import mcp  # noqa: E402
 from server.nl_query import parse_natural_query  # noqa: E402
@@ -98,6 +99,16 @@ def _course_filters(request: Request) -> dict[str, Any]:
     }
 
 
+def _attach_enrollment_metadata(result: dict[str, Any], snapshot: Any) -> dict[str, Any]:
+    result["enrollment_updated_at"] = snapshot.updated_at or result.get("generated_at", "")
+    if snapshot.values:
+        result["enrollment_source"] = "live-cache" if snapshot.fresh else "stale-cache"
+    else:
+        result["enrollment_source"] = "snapshot"
+    result["enrollment_cache_ttl_seconds"] = snapshot.ttl_seconds
+    return result
+
+
 @mcp.custom_route("/api/home", methods=["GET"])
 async def home(_: Request) -> HTMLResponse:
     if not WEB_INDEX.exists():
@@ -125,6 +136,7 @@ async def health(_: Request) -> JSONResponse:
             "ask": "/api/ask",
             "openapi": "/openapi.json",
             "mcp": "/mcp",
+            "enrollment": "live with 5-minute cache",
         }
     )
 
@@ -135,9 +147,10 @@ async def courses(request: Request) -> Response:
         return Response(status_code=204, headers=CORS_HEADERS)
     try:
         filters = _course_filters(request)
-        result = search_courses(**filters)
+        snapshot = get_enrollment_snapshot()
+        result = search_courses(**filters, enrollment_overrides=snapshot.values)
         result["filters"] = {k: v for k, v in filters.items() if v not in (None, False, "")}
-        return _json(result)
+        return _json(_attach_enrollment_metadata(result, snapshot))
     except (TypeError, ValueError) as exc:
         return _error(exc)
 
@@ -147,7 +160,12 @@ async def course_detail(request: Request) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=CORS_HEADERS)
     try:
-        result = get_course(request.path_params["identifier"])
+        snapshot = get_enrollment_snapshot()
+        result = get_course(
+            request.path_params["identifier"],
+            enrollment_overrides=snapshot.values,
+        )
+        _attach_enrollment_metadata(result, snapshot)
         if result["found"] == 0:
             return _json(result, status_code=404)
         return _json(result)
@@ -176,7 +194,12 @@ async def ask(request: Request) -> Response:
         # coincidental substring in a teacher name (e.g. Craig). Explicit
         # "某某老师" queries are already parsed into the dedicated teacher field.
         search_filters["keyword_includes_teacher"] = False
-        result = search_courses(**search_filters)
+        snapshot = get_enrollment_snapshot()
+        result = search_courses(
+            **search_filters,
+            enrollment_overrides=snapshot.values,
+        )
+        _attach_enrollment_metadata(result, snapshot)
         return _json({
             "query": query,
             "parsed": parsed,
@@ -194,8 +217,12 @@ OPENAPI_SPEC = {
     "openapi": "3.1.0",
     "info": {
         "title": "FDU Courses API",
-        "version": "1.0.0",
-        "description": "Public read-only API for querying Fudan University course data.",
+        "version": "1.1.0",
+        "description": (
+            "Public read-only API for querying Fudan University course data. "
+            "Enrollment/capacity fields are refreshed from Fudan's public course-search endpoint "
+            "with a 5-minute cache. Responses include enrollment_updated_at."
+        ),
     },
     "servers": [{"url": "https://fducourses.vercel.app"}],
     "paths": {
@@ -207,7 +234,7 @@ OPENAPI_SPEC = {
                     {"name": "q", "in": "query", "required": True, "schema": {"type": "string"}},
                     {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50}},
                 ],
-                "responses": {"200": {"description": "Parsed filters and matching courses"}},
+                "responses": {"200": {"description": "Parsed filters, live enrollment timestamp and matching courses"}},
             },
             "post": {
                 "operationId": "askCoursesPost",
@@ -227,7 +254,7 @@ OPENAPI_SPEC = {
                         }
                     },
                 },
-                "responses": {"200": {"description": "Parsed filters and matching courses"}},
+                "responses": {"200": {"description": "Parsed filters, live enrollment timestamp and matching courses"}},
             },
         },
         "/api/courses": {
@@ -250,7 +277,7 @@ OPENAPI_SPEC = {
                     {"name": "available_only", "in": "query", "schema": {"type": "boolean"}},
                     {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}},
                 ],
-                "responses": {"200": {"description": "Matching courses"}},
+                "responses": {"200": {"description": "Matching courses with live enrollment timestamp"}},
             }
         },
         "/api/course/{identifier}": {
@@ -261,7 +288,7 @@ OPENAPI_SPEC = {
                     {"name": "identifier", "in": "path", "required": True, "schema": {"type": "string"}}
                 ],
                 "responses": {
-                    "200": {"description": "Course details"},
+                    "200": {"description": "Course details with live enrollment timestamp"},
                     "404": {"description": "Course not found"},
                 },
             }
