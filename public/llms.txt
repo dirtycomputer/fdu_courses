@@ -4,7 +4,7 @@
 
 Use the REST API when you can make ordinary HTTP requests. For a Chinese natural-language request, prefer `GET /api/ask?q=...` or `POST /api/ask` and inspect the returned `parsed` object before relying on the matches. For deterministic filters, use `GET /api/courses`. Use `/mcp` only in clients that natively support MCP.
 
-The service contains teaching-class data for the semester reported by `/health`. Course matching is performed against a local SQLite database generated from Fudan's public course-search data.
+The service contains teaching-class structure data for the semester reported by `/health`. Course matching is performed against a local SQLite database generated from Fudan's public course-search data. Enrollment and capacity (`enrolled` / `limit`) are refreshed from Fudan's public course-search endpoint and cached for 5 minutes.
 
 ## Agent entry points
 
@@ -23,6 +23,11 @@ The service contains teaching-class data for the semester reported by `/health`.
 - `week` filters teaching week and is checked against the same session as weekday/period filters.
 - `limit` is capped at 50.
 - Free-text topic keywords in `/api/ask` search course names and course/class codes. Explicit phrases such as `张三老师` use the teacher filter.
+- `enrolled` and `limit` use the latest successful enrollment snapshot. The service refreshes that snapshot at most once every 300 seconds per warm server instance.
+- `enrollment_updated_at` reports when the enrollment snapshot was fetched. `enrollment_source` is `live-cache`, `stale-cache`, or `snapshot`.
+- If `enrollment_source=stale-cache`, the upstream refresh failed and the latest previously fetched enrollment snapshot is being used.
+- If `enrollment_source=snapshot`, live enrollment could not be fetched and the values come from the dataset generation time (`generated_at`).
+- `available_only=true` is evaluated after the freshest available enrollment values are applied.
 - The API is public and read-only. Do not infer enrollment eligibility beyond fields explicitly returned by the service.
 
 ## Human interface
