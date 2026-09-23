@@ -4,7 +4,7 @@
   "buildCommand": "python -m server.import_data",
   "functions": {
     "api/index.py": {
-      "maxDuration": 30,
+      "maxDuration": 60,
       "includeFiles": "{data/courses.db,docs/data/latest.json,web/index.html}",
       "excludeFiles": "{tests/**,fetch/**,docs/index.html,docs/app.js,docs/style.css}"
     }
