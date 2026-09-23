@@ -1,35 +1,44 @@
-# FDU Courses
+# FDU Courses — LLM-generated structured queries
 
-> Public, read-only Fudan University course search service. It supports zero-install natural-language queries, structured REST queries, course details, and an MCP endpoint. No login or API key is required.
+Public, read-only Fudan University course search. No login or API key is required.
 
-Use the REST API when you can make ordinary HTTP requests. For a Chinese natural-language request, prefer `GET /api/ask?q=...` or `POST /api/ask` and inspect the returned `parsed` object before relying on the matches. For deterministic filters, use `GET /api/courses`. Use `/mcp` only in clients that natively support MCP.
+The calling AI tool's LLM must interpret the user's request and generate a JSON filter object. The server validates and executes this object; it does not parse natural-language sentences. Never send the user's sentence as q or keyword.
 
-The service contains teaching-class structure data for the semester reported by `/health`. Course matching is performed against a local SQLite database generated from Fudan's public course-search data. Enrollment and capacity (`enrolled` / `limit`) are refreshed from Fudan's public course-search endpoint and cached for 5 minutes.
+## Contract and execution
 
-## Agent entry points
+1. Read the JSON Schema at https://fducourses.vercel.app/api/query-schema (static copy: https://dirtycomputer.github.io/fdu_courses/query-schema.json).
+2. Generate and show the filter JSON. Omit unspecified fields; do not send null, extra fields, quoted numbers, or quoted booleans.
+3. POST that object to https://fducourses.vercel.app/api/courses with Content-Type: application/json. If only GET is available, serialize the same object as JSON and URL-encode the whole value: /api/courses?filters=<encoded JSON>. Do not mix filters with flat query parameters.
+4. Check response filters, total, returned, offset, has_more and the actual courses. A 400 is a validation error, not zero matches. Correct invalid JSON according to the error. Network failure is not evidence that no courses exist.
+5. For all results, set limit=50 and offset=0; increment offset by returned until has_more=false. Stop if returned=0. Report partial results if pagination cannot be completed.
 
-- [OpenAPI schema](https://fducourses.vercel.app/openapi.json): Machine-readable REST API description.
-- [API documentation](https://fducourses.vercel.app/api-docs.md): Concise usage guide and examples.
-- [Natural-language query](https://fducourses.vercel.app/api/ask?q=AI): Send a Chinese course-search request; returns parsed filters and matching courses.
-- [Structured course search](https://fducourses.vercel.app/api/courses?limit=5): Query by campus, degree type, weekday, period, week, credits, teacher, department and other filters.
-- [Health and data version](https://fducourses.vercel.app/health): Current semester, data generation time and course count.
-- [MCP endpoint](https://fducourses.vercel.app/mcp): Streamable HTTP MCP for tool-capable clients.
+Example: 查询黄萱菁老师的所有课程
 
-## Query guidance
+{"teacher":"黄萱菁","limit":50}
 
-- `day`: 1=Monday through 7=Sunday.
-- `period_start` / `period_end`: periods 1 through 14. A class matches when its session overlaps the requested interval.
-- Natural-language dayparts map approximately to morning=1-5, noon=5-6, afternoon=6-10, evening=11-14.
-- `week` filters teaching week and is checked against the same session as weekday/period filters.
-- `limit` is capped at 50.
-- Free-text topic keywords in `/api/ask` search course names and course/class codes. Explicit phrases such as `张三老师` use the teacher filter.
-- `enrolled` and `limit` use the latest successful enrollment snapshot. The service refreshes that snapshot at most once every 300 seconds per warm server instance.
-- `enrollment_updated_at` reports when the enrollment snapshot was fetched. `enrollment_source` is `live-cache`, `stale-cache`, or `snapshot`.
-- If `enrollment_source=stale-cache`, the upstream refresh failed and the latest previously fetched enrollment snapshot is being used.
-- If `enrollment_source=snapshot`, live enrollment could not be fetched and the values come from the dataset generation time (`generated_at`).
-- `available_only=true` is evaluated after the freshest available enrollment values are applied.
-- The API is public and read-only. Do not infer enrollment eligibility beyond fields explicitly returned by the service.
+Example: 周三下午张江校区至少3学分的本科人工智能课程，最多10门
 
-## Human interface
+{"keyword":"人工智能","campus":"张江校区","biz_type":"本科","min_credits":3,"day":3,"period_start":6,"period_end":10,"limit":10}
 
-- [FDU Courses](https://fducourses.vercel.app/): Zero-install browser search page.
+Teacher names belong in teacher. Words such as 所有, 本学期 and output-format instructions are not course keywords. Preserve literal topic words. Do not infer unspecified filters.
+
+All fields combine with AND. Space-separated keyword tokens also combine with AND. Multiple campuses/days expressed as OR require separate requests and deduplication by teaching-class id. If a condition cannot be represented (negation, exclusions, strict non-overlap, ambiguous dates or semantic expansion), ask for clarification or explicitly describe additional processing; never silently omit it.
+
+Weekday: 1=Monday through 7=Sunday. Periods: 1-14. Morning usually 1-5, noon 5-6, afternoon 6-10, evening 11-14. Time intervals match by overlap, and weekday/period/week apply to the same session. Exact credits require equal min_credits and max_credits.
+
+Only answer from actual API results. If unable to access the API, still return the generated JSON for the user to paste into the AI instructions page. Do not claim a query ran. If the user supplies the response JSON, use that data to answer.
+
+## Data freshness
+
+Report semester and generated_at for course structure. For enrolled / limit, report enrollment_updated_at, enrollment_source and any enrollment_error. live-cache means within the cache TTL (normally 300 seconds); stale-cache and snapshot are historical and must not be called real-time availability. available_only uses the latest available values, which can be stale. Do not infer enrollment eligibility.
+
+## Other entry points
+
+- https://fducourses.vercel.app/openapi.json — OpenAPI schema.
+- https://fducourses.vercel.app/api-docs.md — REST guide.
+- https://fducourses.vercel.app/api/course/{identifier} — teaching-class ID/code or course code.
+- https://fducourses.vercel.app/health — dataset version.
+- https://fducourses.vercel.app/mcp — native MCP clients can have their LLM generate search_courses tool arguments directly.
+- https://fducourses.vercel.app/ — paste and execute LLM-generated JSON.
+
+Migration: /api/ask no longer accepts natural-language q or {"query":"..."}. It is a deprecated alias accepting the same structured JSON body or ?filters=... only. Use /api/courses for new clients. Legacy flat GET /api/courses parameters remain supported, with q as a keyword alias.

@@ -1,118 +1,85 @@
-# FDU Courses Public API
+# FDU Courses Public API v2
 
-Production base URL: `https://fducourses.vercel.app`
+Base URL: `https://fducourses.vercel.app`. Public, read-only, no authentication.
 
-The API is public, read-only, and requires no authentication.
+## LLM → JSON → query
 
-## Zero-install web search
+The calling AI tool (ChatGPT, Claude, Gemini, 豆包, DeepSeek, etc.) uses its own LLM to interpret user intent and produce a filter JSON object. The backend only validates that object and queries SQLite. It contains no natural-language parser and requires no separate LLM API key.
 
-Open:
+- JSON Schema: `GET /api/query-schema`
+- Static copy of the same schema: `https://dirtycomputer.github.io/fdu_courses/query-schema.json`
+- AI instructions: `https://dirtycomputer.github.io/fdu_courses/?view=ai`
+- Browser JSON executor: `https://fducourses.vercel.app/`
 
-```text
-https://fducourses.vercel.app/
-```
-
-Enter a Chinese natural-language query such as:
-
-```text
-找周三下午张江校区、3 学分以上、本科生能上的人工智能相关课程，最多 10 门
-```
-
-The page shows the parsed filters before the results so the interpretation is inspectable.
-
-## Natural-language API
-
-### GET
-
-```bash
-curl --get 'https://fducourses.vercel.app/api/ask' \
-  --data-urlencode 'q=找周三下午张江校区、3 学分以上、本科生能上的人工智能相关课程，最多 10 门'
-```
-
-### POST
-
-```bash
-curl 'https://fducourses.vercel.app/api/ask' \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"找周三下午张江校区、3 学分以上、本科生能上的人工智能相关课程，最多 10 门"}'
-```
-
-The response contains both `parsed` and `courses`:
+For “查询黄萱菁老师的所有课程”, the LLM should produce:
 
 ```json
-{
-  "query": "...",
-  "parsed": {
-    "campus": "张江校区",
-    "biz_type": "本科",
-    "day": 3,
-    "period_start": 6,
-    "period_end": 10,
-    "min_credits": 3.0,
-    "keyword": "人工智能",
-    "limit": 10
-  },
-  "total": 12,
-  "returned": 10,
-  "courses": []
-}
+{"teacher":"黄萱菁","limit":50}
 ```
 
-The parser currently handles common expressions for campus, undergraduate/graduate type, weekday, morning/afternoon/evening, explicit periods, teaching week, credit bounds, teacher, syllabus availability, seat availability, result limit, and free-text keywords.
+For “周三下午张江校区至少3学分的本科人工智能课程，最多10门”:
 
-## Structured search API
+```json
+{"keyword":"人工智能","campus":"张江校区","biz_type":"本科","min_credits":3,"day":3,"period_start":6,"period_end":10,"limit":10}
+```
+
+These examples demonstrate intended LLM outputs; they are not hard-coded sentence mappings. Unspecified conditions must be omitted. “所有”, “本学期” and presentation instructions must not become keywords. Unsupported or ambiguous conditions require clarification or explicit additional processing, not silent removal.
+
+## Execute structured JSON
+
+```bash
+curl 'https://fducourses.vercel.app/api/courses' \
+  -H 'Content-Type: application/json' \
+  -d '{"teacher":"黄萱菁","limit":50}'
+```
+
+For clients restricted to GET:
 
 ```bash
 curl --get 'https://fducourses.vercel.app/api/courses' \
-  --data-urlencode 'q=人工智能' \
-  --data-urlencode 'campus=张江校区' \
-  --data-urlencode 'biz_type=本科' \
-  --data-urlencode 'day=3' \
-  --data-urlencode 'period_start=6' \
-  --data-urlencode 'period_end=10' \
-  --data-urlencode 'min_credits=3' \
-  --data-urlencode 'limit=10'
+  --data-urlencode 'filters={"teacher":"黄萱菁","limit":50}'
 ```
 
-Supported query parameters:
+POST accepts the filter object itself, not a wrapper. GET accepts a single URL-encoded `filters` JSON value. Never mix it with flat parameters. Unknown fields, invalid types/enums/ranges, duplicate JSON keys, non-finite numbers, nulls and conflicting bounds return HTTP 400 before any enrollment refresh or database query.
 
-- `q` / `keyword`
-- `teacher`
-- `department`
-- `campus`: `邯郸校区`, `张江校区`, `枫林校区`, `江湾校区`, `其他校区`
-- `biz_type`: `本科`, `研究生`, `本研融通`
-- `min_credits`, `max_credits`
-- `day`: 1 (Monday) through 7 (Sunday)
-- `period_start`, `period_end`: 1 through 14
-- `week`: teaching week
-- `has_syllabus`: boolean
-- `available_only`: boolean
-- `limit`: 1 through 50
+| Field | Meaning / constraints |
+|---|---|
+| `keyword` | Course name/code substrings; whitespace-separated tokens use AND |
+| `teacher`, `department` | Explicit teacher / department substring |
+| `campus` | 邯郸校区 / 张江校区 / 枫林校区 / 江湾校区 / 其他校区 |
+| `biz_type` | 本科 / 研究生 / 本研融通 |
+| `min_credits`, `max_credits` | Non-negative numbers; min ≤ max |
+| `day` | Integer 1–7, Monday–Sunday |
+| `period_start`, `period_end` | Integer 1–14; start ≤ end; overlap matching |
+| `week` | Integer teaching week 1–30 |
+| `has_syllabus`, `available_only` | JSON booleans |
+| `limit` | Integer 1–50; default 20 |
+| `offset` | Integer 0–2147483647; default 0 |
 
-## Course detail
+All fields combine with AND. Weekday, period and week must match the same session. For OR across campuses/days, the LLM must make separate requests and deduplicate by teaching-class id. Exact credits require identical min and max. Strict non-overlap and exclusions require explicit extra processing or clarification.
 
-```bash
-curl 'https://fducourses.vercel.app/api/course/<teaching-class-id-or-code>'
-```
+Responses include `filters` (validated filters with defaults), `semester`, `generated_at`, `total`, `returned`, `offset`, `has_more`, `courses`, and enrollment metadata. For “all” results, request limit=50, increment offset by returned until has_more=false, and report any incomplete retrieval. Concurrent dataset changes may affect page boundaries.
 
-The identifier may be a teaching-class numeric ID, teaching-class code, or course code.
+## Enrollment freshness
 
-## OpenAPI
+`enrolled` / `limit` are the latest available values, not guaranteed live values. Inspect:
 
-Machine-readable schema:
+- `enrollment_updated_at`: time of the data used.
+- `enrollment_source`: `live-cache` (within TTL), `stale-cache` (refresh failed), or `snapshot` (dataset values).
+- `enrollment_cache_ttl_seconds`: normally 300.
+- `enrollment_error`: upstream refresh error, when present.
 
-```text
-https://fducourses.vercel.app/openapi.json
-```
+Never describe stale/static values as real-time seats. `available_only=true` is evaluated against the available values after overrides are applied; it does not guarantee current availability or enrollment eligibility.
 
-AI/agent platforms that accept an OpenAPI schema can import this URL and call the REST API without using MCP.
+## Migration
 
-## MCP
+Natural-language `/api/ask?q=...` and `POST /api/ask {"query":"..."}` are no longer supported. `/api/ask` remains a deprecated URL alias for structured JSON POST or GET `?filters=...`. The response uses `filters`, not heuristic `parsed` output. Update callers before deployment.
 
-The existing MCP endpoint remains available:
+Legacy flat `GET /api/courses?teacher=黄萱菁&limit=50` remains supported. In that legacy mode `q` aliases `keyword`, and keywords can still match teacher names. New JSON queries match keywords against course names/codes only; use `teacher` explicitly.
 
-```text
-https://fducourses.vercel.app/mcp
-```
+## Other endpoints
 
-REST and MCP use the same SQLite query layer.
+- `GET /api/course/{identifier}`: teaching-class ID/code or course code.
+- `GET /health`: dataset version and count.
+- `GET /openapi.json`: OpenAPI 3.1; includes the same JSON Schema.
+- `/mcp`: native MCP tools `search_courses` and `get_course`. The calling LLM creates structured tool arguments directly. `search_courses` supports `offset` pagination and validates filters against the shared contract.

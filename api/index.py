@@ -21,7 +21,7 @@ from server.db import connect, resolve_db_path  # noqa: E402
 from server.enrollment import get_enrollment_snapshot  # noqa: E402
 from server.import_data import DEFAULT_SOURCE, import_json  # noqa: E402
 from server.mcp_server import mcp  # noqa: E402
-from server.nl_query import parse_natural_query  # noqa: E402
+from server.query_contract import QUERY_SCHEMA, decode_filters, validate_filters  # noqa: E402
 from server.queries import get_course, search_courses  # noqa: E402
 
 WEB_INDEX = PROJECT_ROOT / "web" / "index.html"
@@ -81,22 +81,22 @@ def _optional_bool(value: str | None, name: str) -> bool | None:
 
 def _course_filters(request: Request) -> dict[str, Any]:
     q = request.query_params
-    return {
-        "keyword": q.get("q") or q.get("keyword") or None,
-        "teacher": q.get("teacher") or None,
-        "department": q.get("department") or None,
-        "campus": q.get("campus") or None,
-        "biz_type": q.get("biz_type") or None,
-        "min_credits": _optional_float(q.get("min_credits"), "min_credits"),
-        "max_credits": _optional_float(q.get("max_credits"), "max_credits"),
-        "day": _optional_int(q.get("day"), "day"),
-        "period_start": _optional_int(q.get("period_start"), "period_start"),
-        "period_end": _optional_int(q.get("period_end"), "period_end"),
-        "week": _optional_int(q.get("week"), "week"),
-        "has_syllabus": _optional_bool(q.get("has_syllabus"), "has_syllabus"),
-        "available_only": bool(_optional_bool(q.get("available_only"), "available_only") or False),
-        "limit": _optional_int(q.get("limit"), "limit") or 20,
-    }
+    if len(q.multi_items()) != len(q):
+        raise ValueError("Duplicate query parameters are not supported")
+    if "q" in q and "keyword" in q:
+        raise ValueError("Use keyword or q, not both")
+    filters: dict[str, Any] = {}
+    for raw_key, raw in q.items():
+        key = "keyword" if raw_key == "q" else raw_key
+        field = QUERY_SCHEMA["properties"].get(key)
+        if field is None:
+            raise ValueError(f"Unknown filter: {raw_key}")
+        if not raw.strip():
+            raise ValueError(f"{key} cannot be blank")
+        converters = {"integer": _optional_int, "number": _optional_float, "boolean": _optional_bool}
+        converter = converters.get(field["type"])
+        filters[key] = converter(raw, key) if converter else raw
+    return validate_filters(filters)
 
 
 def _attach_enrollment_metadata(result: dict[str, Any], snapshot: Any) -> dict[str, Any]:
@@ -135,26 +135,52 @@ async def health(_: Request) -> JSONResponse:
             "generatedAt": metadata.get("generatedAt", ""),
             "courses": course_count,
             "rest": "/api/courses",
-            "ask": "/api/ask",
+            "query_schema": "/api/query-schema",
+            "query_mode": "caller-llm-structured-json",
             "openapi": "/openapi.json",
             "mcp": "/mcp",
-            "enrollment": "live with 5-minute cache",
+            "enrollment": "5-minute cache; stale/static fallback on upstream failure",
         }
     )
 
 
-@mcp.custom_route("/api/courses", methods=["GET", "OPTIONS"])
-async def courses(request: Request) -> Response:
+async def _structured_query(request: Request, *, legacy_params: bool = False) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=CORS_HEADERS)
     try:
-        filters = _course_filters(request)
+        if request.method == "POST":
+            if request.query_params:
+                raise ValueError("Send filters in the JSON body only")
+            filters = decode_filters((await request.body()).decode("utf-8"))
+            includes_teacher = False
+        elif "filters" in request.query_params:
+            if len(request.query_params.multi_items()) != 1:
+                raise ValueError("Send only the filters JSON parameter")
+            filters = decode_filters(request.query_params["filters"])
+            includes_teacher = False
+        elif legacy_params:
+            filters = _course_filters(request)
+            includes_teacher = True  # Preserve the existing flat GET keyword semantics.
+        else:
+            raise ValueError("Natural-language parsing has been removed. Ask your AI tool's LLM to generate JSON using /api/query-schema, then POST that object or GET ?filters=<encoded JSON>.")
         snapshot = get_enrollment_snapshot()
-        result = search_courses(**filters, enrollment_overrides=snapshot.values)
-        result["filters"] = {k: v for k, v in filters.items() if v not in (None, False, "")}
+        result = search_courses(**filters, keyword_includes_teacher=includes_teacher, enrollment_overrides=snapshot.values)
+        result["filters"] = filters
         return _json(_attach_enrollment_metadata(result, snapshot))
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, UnicodeDecodeError) as exc:
         return _error(exc)
+
+
+@mcp.custom_route("/api/query-schema", methods=["GET", "OPTIONS"])
+async def query_schema(request: Request) -> Response:
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=CORS_HEADERS)
+    return _json(QUERY_SCHEMA)
+
+
+@mcp.custom_route("/api/courses", methods=["GET", "POST", "OPTIONS"])
+async def courses(request: Request) -> Response:
+    return await _structured_query(request, legacy_params=True)
 
 
 @mcp.custom_route("/api/course/{identifier}", methods=["GET", "OPTIONS"])
@@ -177,131 +203,63 @@ async def course_detail(request: Request) -> Response:
 
 @mcp.custom_route("/api/ask", methods=["GET", "POST", "OPTIONS"])
 async def ask(request: Request) -> Response:
-    if request.method == "OPTIONS":
-        return Response(status_code=204, headers=CORS_HEADERS)
-    try:
-        if request.method == "GET":
-            query = request.query_params.get("q") or request.query_params.get("query") or ""
-            default_limit = _optional_int(request.query_params.get("limit"), "limit") or 20
-        else:
-            body = await request.json()
-            if not isinstance(body, dict):
-                raise ValueError("JSON body must be an object")
-            query = body.get("query") or body.get("q") or ""
-            default_limit = int(body.get("limit") or 20)
-
-        parsed = parse_natural_query(query, default_limit=default_limit)
-        search_filters = dict(parsed)
-        # A free-text topic such as "AI" should match course names/codes, not a
-        # coincidental substring in a teacher name (e.g. Craig). Explicit
-        # "某某老师" queries are already parsed into the dedicated teacher field.
-        search_filters["keyword_includes_teacher"] = False
-        snapshot = get_enrollment_snapshot()
-        result = search_courses(
-            **search_filters,
-            enrollment_overrides=snapshot.values,
-        )
-        _attach_enrollment_metadata(result, snapshot)
-        return _json({
-            "query": query,
-            "parsed": parsed,
-            **result,
-        })
-    except (TypeError, ValueError) as exc:
-        return _error(exc)
-    except Exception as exc:
-        if exc.__class__.__name__ == "JSONDecodeError":
-            return _error(ValueError("request body must be valid JSON"))
-        raise
+    """Compatibility URL for structured JSON only; no heuristic NLP fallback."""
+    return await _structured_query(request)
 
 
+QUERY_RESPONSES = {
+    "200": {"description": "Validated filters, matching teaching classes, pagination and enrollment freshness"},
+    "400": {"description": "Invalid JSON, unknown fields, unsupported values or conflicting bounds"},
+}
+JSON_QUERY_GET = {
+    "operationId": "searchCoursesJsonGet",
+    "summary": "Execute a filter object generated by the calling LLM; no natural-language parsing",
+    "parameters": [{"name": "filters", "in": "query", "required": True,
+                    "content": {"application/json": {"schema": QUERY_SCHEMA}}}],
+    "responses": QUERY_RESPONSES,
+}
+JSON_QUERY_POST = {
+    "operationId": "searchCoursesJson",
+    "summary": "Validate and execute a filter object generated by the calling LLM",
+    "requestBody": {"required": True, "content": {"application/json": {"schema": QUERY_SCHEMA}}},
+    "responses": QUERY_RESPONSES,
+}
 OPENAPI_SPEC = {
     "openapi": "3.1.0",
-    "info": {
-        "title": "FDU Courses API",
-        "version": "1.1.0",
-        "description": (
-            "Public read-only API for querying Fudan University course data. "
-            "Enrollment/capacity fields are refreshed from Fudan's public course-search endpoint "
-            "with a 5-minute cache. Responses include enrollment_updated_at."
-        ),
-    },
+    "info": {"title": "FDU Courses API", "version": "2.0.0",
+             "description": "The calling AI tool's LLM interprets user intent and generates JSON. The service validates filters and queries SQLite. Enrollment may fall back to stale or static data; inspect enrollment_source."},
     "servers": [{"url": "https://fducourses.vercel.app"}],
     "paths": {
-        "/api/ask": {
-            "get": {
-                "operationId": "askCourses",
-                "summary": "Query courses with a natural-language Chinese prompt",
-                "parameters": [
-                    {"name": "q", "in": "query", "required": True, "schema": {"type": "string"}},
-                    {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50}},
-                ],
-                "responses": {"200": {"description": "Parsed filters, live enrollment timestamp and matching courses"}},
-            },
-            "post": {
-                "operationId": "askCoursesPost",
-                "summary": "Query courses with a natural-language Chinese prompt",
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "required": ["query"],
-                                "properties": {
-                                    "query": {"type": "string", "maxLength": 500},
-                                    "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20},
-                                },
-                            }
-                        }
-                    },
-                },
-                "responses": {"200": {"description": "Parsed filters, live enrollment timestamp and matching courses"}},
-            },
-        },
+        "/api/query-schema": {"get": {
+            "operationId": "getQuerySchema", "summary": "JSON Schema for LLM-generated course filters",
+            "responses": {"200": {"description": "JSON Schema (draft 2020-12)"}},
+        }},
         "/api/courses": {
-            "get": {
-                "operationId": "searchCourses",
-                "summary": "Search courses with structured filters",
-                "parameters": [
-                    {"name": "q", "in": "query", "schema": {"type": "string"}},
-                    {"name": "teacher", "in": "query", "schema": {"type": "string"}},
-                    {"name": "department", "in": "query", "schema": {"type": "string"}},
-                    {"name": "campus", "in": "query", "schema": {"type": "string", "enum": ["邯郸校区", "张江校区", "枫林校区", "江湾校区", "其他校区"]}},
-                    {"name": "biz_type", "in": "query", "schema": {"type": "string", "enum": ["本科", "研究生", "本研融通"]}},
-                    {"name": "min_credits", "in": "query", "schema": {"type": "number"}},
-                    {"name": "max_credits", "in": "query", "schema": {"type": "number"}},
-                    {"name": "day", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 7}},
-                    {"name": "period_start", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 14}},
-                    {"name": "period_end", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 14}},
-                    {"name": "week", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 30}},
-                    {"name": "has_syllabus", "in": "query", "schema": {"type": "boolean"}},
-                    {"name": "available_only", "in": "query", "schema": {"type": "boolean"}},
-                    {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}},
-                ],
-                "responses": {"200": {"description": "Matching courses with live enrollment timestamp"}},
-            }
+            "get": {**JSON_QUERY_GET,
+                    "description": "Supply filters as URL-encoded JSON. Legacy flat query parameters are supported separately; never mix them with filters.",
+                    "parameters": [
+                        {**JSON_QUERY_GET["parameters"][0], "required": False},
+                        *[{"name": name, "in": "query", "schema": schema}
+                          for name, schema in QUERY_SCHEMA["properties"].items()],
+                        {"name": "q", "in": "query", "schema": {"type": "string"},
+                         "description": "Legacy keyword alias; never pass a natural-language sentence."},
+                    ]},
+            "post": JSON_QUERY_POST,
         },
-        "/api/course/{identifier}": {
-            "get": {
-                "operationId": "getCourse",
-                "summary": "Get course details by teaching-class ID/code or course code",
-                "parameters": [
-                    {"name": "identifier", "in": "path", "required": True, "schema": {"type": "string"}}
-                ],
-                "responses": {
-                    "200": {"description": "Course details with live enrollment timestamp"},
-                    "404": {"description": "Course not found"},
-                },
-            }
+        "/api/ask": {
+            "get": {**JSON_QUERY_GET, "operationId": "askStructuredGet", "deprecated": True},
+            "post": {**JSON_QUERY_POST, "operationId": "askStructuredPost", "deprecated": True},
         },
-        "/health": {
-            "get": {
-                "operationId": "health",
-                "summary": "Service and data health",
-                "responses": {"200": {"description": "Health information"}},
-            }
-        },
+        "/api/course/{identifier}": {"get": {
+            "operationId": "getCourse", "summary": "Get course details by teaching-class ID/code or course code",
+            "parameters": [{"name": "identifier", "in": "path", "required": True, "schema": {"type": "string"}}],
+            "responses": {"200": {"description": "Course details and enrollment freshness"},
+                          "404": {"description": "Course not found"}},
+        }},
+        "/health": {"get": {
+            "operationId": "health", "summary": "Service and dataset version",
+            "responses": {"200": {"description": "Health information"}},
+        }},
     },
 }
 

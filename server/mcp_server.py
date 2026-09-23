@@ -9,6 +9,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from .enrollment import get_enrollment_snapshot
 from .queries import get_course as query_get_course
 from .queries import search_courses as query_search_courses
+from .query_contract import validate_filters
 
 Campus = Literal["邯郸校区", "张江校区", "枫林校区", "江湾校区", "其他校区"]
 BizType = Literal["本科", "研究生", "本研融通"]
@@ -16,11 +17,13 @@ BizType = Literal["本科", "研究生", "本研融通"]
 mcp = MCPServer(
     "FDU Courses",
     instructions=(
-        "查询复旦大学当前学期开课信息。优先使用结构化筛选；"
+        "查询复旦大学当前学期开课信息。调用方 LLM 应理解用户需求并生成工具的结构化 JSON 参数；服务端不解析自然语言。"
+        "教师使用 teacher，不要把所有、本学期或输出要求当成关键词；无法表达的条件先澄清或分次查询。"
         "day 使用 1=周一 ... 7=周日；节次为 1-14。"
         "下午通常对应第 6-10 节，晚上通常对应第 11-14 节。"
         "选课人数与容量会从复旦公开课程接口刷新，并缓存 5 分钟；"
-        "响应中的 enrollment_updated_at 表示人数更新时间。"
+        "响应中的 enrollment_updated_at 表示人数更新时间；必须检查 enrollment_source，过期缓存与静态数据不能称为实时人数。"
+        "需要全部结果时使用 limit=50 并递增 offset，直到 has_more=false。"
     ),
 )
 
@@ -32,6 +35,8 @@ def _with_enrollment_meta(result: dict, snapshot) -> dict:
     else:
         result["enrollment_source"] = "snapshot"
     result["enrollment_cache_ttl_seconds"] = snapshot.ttl_seconds
+    if snapshot.error:
+        result["enrollment_error"] = snapshot.error
     return result
 
 
@@ -51,18 +56,18 @@ def search_courses(
     has_syllabus: bool | None = None,
     available_only: bool = False,
     limit: int = 20,
+    offset: int = 0,
 ) -> dict:
     """查询复旦课程。
 
-    keyword 可匹配课程名、教学班代码、课程代码和教师姓名。
+    keyword 匹配课程名、教学班代码、课程代码；教师姓名使用 teacher。
     day: 1=周一 ... 7=周日。
     period_start/period_end: 1-14；同时提供时按时间段重叠查询。
     week: 教学周。
-    available_only: 按最近 5 分钟内刷新的人数，仅返回尚未满员的教学班。
-    单次最多返回 50 个教学班。
+    available_only: 按最新可用人数筛选，需检查 enrollment_source 判断是否过期。
+    单次最多返回 50 个教学班；offset 用于分页。
     """
-    snapshot = get_enrollment_snapshot()
-    result = query_search_courses(
+    filters = validate_filters({key: value for key, value in dict(
         keyword=keyword,
         teacher=teacher,
         department=department,
@@ -77,8 +82,11 @@ def search_courses(
         has_syllabus=has_syllabus,
         available_only=available_only,
         limit=limit,
-        enrollment_overrides=snapshot.values,
-    )
+        offset=offset,
+    ).items() if value is not None})
+    snapshot = get_enrollment_snapshot()
+    result = query_search_courses(**filters, keyword_includes_teacher=False, enrollment_overrides=snapshot.values)
+    result["filters"] = filters
     return _with_enrollment_meta(result, snapshot)
 
 
